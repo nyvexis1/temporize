@@ -1,7 +1,7 @@
 {
   "name": "@alsoftworks/temporize",
-  "version": "0.2.0",
-  "description": "Typed, promise-aware debounce and throttle utilities with cancellation.",
+  "version": "0.3.0",
+  "description": "Typed, promise-aware timing and concurrency utilities with cancellation.",
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -27,21 +27,27 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsup src/index.ts src/react/index.ts src/vue/index.ts --format esm,cjs --dts --clean --minify --treeshake",
     "build:core": "tsup src/index.ts --format esm,cjs --dts --clean --minify --treeshake",
     "test": "vitest run",
-    "test:core": "vitest run test/debounce.test.ts test/debounceAsync.test.ts test/throttle.test.ts test/batch.test.ts test/retry.test.ts test/idle.test.ts",
+    "test:core": "vitest run test/debounce.test.ts test/debounceAsync.test.ts test/throttle.test.ts test/batch.test.ts test/retry.test.ts test/idle.test.ts test/concurrencyLimit.test.ts test/errors.test.ts",
     "test:watch": "vitest",
     "bench": "tsx bench/index.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm test && npm run typecheck && npm run build"
+    "lint": "eslint src test bench scripts && prettier --check .",
+    "format": "prettier --write .",
+    "size": "node scripts/check-size.mjs",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build && npm run size"
   },
   "keywords": [
     "debounce",
     "throttle",
+    "concurrency",
     "batch",
     "retry",
     "requestidlecallback",
@@ -54,6 +60,14 @@
     "vue-composables"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyvexis1/temporize.git"
+  },
+  "homepage": "https://github.com/nyvexis1/temporize#readme",
+  "bugs": {
+    "url": "https://github.com/nyvexis1/temporize/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -74,22 +88,29 @@
   },
   "devDependencies": {
     "@testing-library/react": "^14.3.1",
+    "@eslint/js": "^9.39.5",
     "@types/node": "^22.10.2",
     "@types/lodash.debounce": "^4.0.9",
     "@types/lodash.throttle": "^4.1.9",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vue/test-utils": "^2.4.6",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "esbuild": "^0.25.0",
+    "globals": "^16.4.0",
     "jsdom": "^22.1.0",
     "lodash.debounce": "^4.0.8",
     "lodash.throttle": "^4.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "prettier": "^3.9.0",
     "tinybench": "^3.1.1",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "vitest": "^4.1.10",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^3.2.7",
     "vue": "^3.5.13"
   }
 }

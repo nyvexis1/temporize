@@ -3,6 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useDebounce } from "../../src/react";
+import { TemporizeAbortError } from "../../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -32,13 +33,12 @@ describe("React useDebounce", () => {
   it("recreates on wait changes and cancels the old timer", async () => {
     vi.useFakeTimers();
     const fn = vi.fn((value: string) => value);
-    const { result, rerender } = renderHook(
-      ({ wait }) => useDebounce(fn, wait),
-      { initialProps: { wait: 100 } },
-    );
+    const { result, rerender } = renderHook(({ wait }) => useDebounce(fn, wait), {
+      initialProps: { wait: 100 },
+    });
     const oldReference = result.current;
     const oldCall = result.current("old");
-    const oldRejection = expect(oldCall).rejects.toMatchObject({ name: "AbortError" });
+    const oldRejection = expect(oldCall).rejects.toBeInstanceOf(TemporizeAbortError);
 
     rerender({ wait: 10 });
     expect(result.current).not.toBe(oldReference);
@@ -52,7 +52,7 @@ describe("React useDebounce", () => {
     const fn = vi.fn();
     const { result, unmount } = renderHook(() => useDebounce(fn, 25));
     const pending = result.current("value");
-    const rejection = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
 
     unmount();
     await rejection;

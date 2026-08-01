@@ -14,12 +14,14 @@ describe("Vue useDebouncedRef", () => {
     vi.useFakeTimers();
     const source = ref("a");
     let debounced: Ref<string> | undefined;
-    const wrapper = mount(defineComponent({
-      setup() {
-        debounced = useDebouncedRef(source, 30);
-        return () => null;
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          debounced = useDebouncedRef(source, 30);
+          return () => null;
+        },
+      }),
+    );
 
     expect(isRef(debounced)).toBe(true);
     expect(debounced?.value).toBe("a");
@@ -40,12 +42,14 @@ describe("Vue useDebouncedRef", () => {
     vi.useFakeTimers();
     const source = ref(1);
     let debounced: Ref<number> | undefined;
-    const wrapper = mount(defineComponent({
-      setup() {
-        debounced = useDebouncedRef(source, 10);
-        return () => null;
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          debounced = useDebouncedRef(source, 10);
+          return () => null;
+        },
+      }),
+    );
 
     source.value = 2;
     wrapper.unmount();

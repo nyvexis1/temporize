@@ -14,19 +14,24 @@ describe("Vue useRafThrottle", () => {
   it("cancels a scheduled frame on unmount", () => {
     let frame: FrameRequestCallback | undefined;
     const cancelFrame = vi.fn();
-    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
-      frame = callback;
-      return 17;
-    }));
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        frame = callback;
+        return 17;
+      }),
+    );
     vi.stubGlobal("cancelAnimationFrame", cancelFrame);
     const fn = vi.fn();
     let callback: RafThrottledFunction<[string]> | undefined;
-    const wrapper = mount(defineComponent({
-      setup() {
-        callback = useRafThrottle(fn);
-        return () => null;
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          callback = useRafThrottle(fn);
+          return () => null;
+        },
+      }),
+    );
 
     callback?.("latest");
     wrapper.unmount();

@@ -1,6 +1,13 @@
-import { abortError } from "./debounce";
+import { TemporizeAbortError } from "./errors";
 
-/** Options that control batch timing, capacity, and cancellation. */
+/**
+ * Options that control batch timing, capacity, and cancellation.
+ *
+ * @example
+ * ```ts
+ * const options: BatchOptions = { maxSize: 50 };
+ * ```
+ */
 export interface BatchOptions {
   /** Fire immediately when this many calls are queued. Values below `1` become `1`. */
   maxSize?: number;
@@ -8,7 +15,14 @@ export interface BatchOptions {
   signal?: AbortSignal;
 }
 
-/** A promise-returning batched function with queue lifecycle controls. */
+/**
+ * A promise-returning batched function with queue lifecycle controls.
+ *
+ * @example
+ * ```ts
+ * const load: BatchedFunction<[string], User[]> = batch(fetchUsers, 10);
+ * ```
+ */
 export interface BatchedFunction<Args extends unknown[], Result> {
   /** Queue one argument tuple and resolve with the shared result for its batch. */
   (...args: Args): Promise<Result>;
@@ -35,7 +49,14 @@ type Deferred<Result> = {
  * @param fn Function that receives all queued argument tuples at once.
  * @param wait Collection window in milliseconds. Negative values become `0`.
  * @param options Maximum batch size and cancellation settings.
+ * @param options.maxSize Number of calls that causes an immediate batch.
+ * @param options.signal Signal that rejects queued and future calls.
  * @returns A batched function with `cancel`, `flush`, `pending`, and `size`.
+ * @example
+ * ```ts
+ * const loadUsers = batch(fetchUsersByIds, 10, { maxSize: 50 });
+ * const user = await loadUsers("user-42");
+ * ```
  */
 export function batch<Args extends unknown[], Result>(
   fn: (calls: Args[]) => Result | PromiseLike<Result>,
@@ -43,9 +64,10 @@ export function batch<Args extends unknown[], Result>(
   options: BatchOptions = {},
 ): BatchedFunction<Args, Result> {
   const delay = Math.max(0, wait || 0);
-  const maxSize = options.maxSize === undefined
-    ? Infinity
-    : Math.max(1, Math.floor(options.maxSize || 1));
+  const maxSize =
+    options.maxSize === undefined
+      ? Infinity
+      : Math.max(1, Math.floor(options.maxSize || 1));
   let timer: ReturnType<typeof setTimeout> | undefined;
   let calls: Args[] = [];
   let waiters: Deferred<Result>[] = [];
@@ -70,16 +92,18 @@ export function batch<Args extends unknown[], Result>(
     return lastResult;
   };
 
-  const cancel = (): void => {
+  const cancel = (reason?: unknown): void => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
     calls = [];
-    const error = abortError();
+    const error = new TemporizeAbortError(reason);
     for (const waiter of waiters.splice(0)) waiter.reject(error);
   };
 
   const batched = function (...args: Args): Promise<Result> {
-    if (options.signal?.aborted) return Promise.reject(abortError());
+    if (options.signal?.aborted) {
+      return Promise.reject(new TemporizeAbortError(options.signal.reason));
+    }
     calls.push(args);
     const promise = new Promise<Result>((resolve, reject) => {
       waiters.push({ resolve, reject });
@@ -92,10 +116,12 @@ export function batch<Args extends unknown[], Result>(
     return promise;
   } as BatchedFunction<Args, Result>;
 
-  batched.cancel = cancel;
+  batched.cancel = () => cancel();
   batched.flush = invoke;
   batched.pending = () => calls.length > 0;
   batched.size = () => calls.length;
-  options.signal?.addEventListener("abort", cancel, { once: true });
+  options.signal?.addEventListener("abort", () => cancel(options.signal?.reason), {
+    once: true,
+  });
   return batched;
 }

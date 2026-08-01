@@ -3,6 +3,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRafThrottle, useThrottle } from "../../src/react";
+import { TemporizeAbortError } from "../../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -23,7 +24,7 @@ describe("React useThrottle", () => {
     rerender({ fn: secondFn });
     expect(result.current).toBe(firstReference);
     const pending = result.current(4);
-    const rejection = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
     unmount();
     await rejection;
     await act(() => vi.advanceTimersByTimeAsync(20));
@@ -37,17 +38,19 @@ describe("React useRafThrottle", () => {
   it("uses the latest callback and cancels a scheduled frame on unmount", () => {
     let frame: FrameRequestCallback | undefined;
     const cancelFrame = vi.fn();
-    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
-      frame = callback;
-      return 11;
-    }));
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((callback: FrameRequestCallback) => {
+        frame = callback;
+        return 11;
+      }),
+    );
     vi.stubGlobal("cancelAnimationFrame", cancelFrame);
     const firstFn = vi.fn();
     const secondFn = vi.fn();
-    const { result, rerender, unmount } = renderHook(
-      ({ fn }) => useRafThrottle(fn),
-      { initialProps: { fn: firstFn } },
-    );
+    const { result, rerender, unmount } = renderHook(({ fn }) => useRafThrottle(fn), {
+      initialProps: { fn: firstFn },
+    });
     const firstReference = result.current;
 
     rerender({ fn: secondFn });

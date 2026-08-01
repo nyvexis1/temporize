@@ -1,6 +1,11 @@
 # temporize
 
-Small, strongly typed debounce and throttle utilities for modern TypeScript.
+[![npm version](https://img.shields.io/npm/v/%40alsoftworks%2Ftemporize)](https://www.npmjs.com/package/@alsoftworks/temporize)
+[![npm downloads](https://img.shields.io/npm/dm/%40alsoftworks%2Ftemporize)](https://www.npmjs.com/package/@alsoftworks/temporize)
+[![CI](https://github.com/nyvexis1/temporize/actions/workflows/ci.yml/badge.svg)](https://github.com/nyvexis1/temporize/actions/workflows/ci.yml)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/%40alsoftworks%2Ftemporize)](https://bundlephobia.com/package/@alsoftworks/temporize)
+
+Small, strongly typed timing and concurrency utilities for modern TypeScript.
 Every scheduled call returns a real promise for the wrapped function's actual
 result. There are no runtime dependencies, and the package ships as ESM and
 CommonJS.
@@ -13,21 +18,22 @@ npm install @alsoftworks/temporize
 
 ## Why temporize?
 
-| Capability | temporize | lodash.debounce / lodash.throttle |
-| --- | --- | --- |
-| Inferred arguments and resolved return value | Full generic inference | Types available separately |
-| Per-call return | `Promise<Awaited<R>>` | Last synchronous result or `undefined` |
-| Async error propagation | Native promise rejection | Caller manages returned value |
-| Cancellation | `.cancel()` and `AbortSignal` | `.cancel()` |
-| Maximum debounce wait | Yes | Yes |
-| Promise queue rate limiter | `throttlePromise` | No |
-| Async overlap policy | `debounceAsync` | No |
-| Animation-frame throttling | Browser API plus Node fallback | No |
-| Multi-call argument batching | `batch` | No |
-| Exponential-backoff retries | `retry` | No |
-| Idle-period scheduling | `idle` with Safari/Node fallback | No |
-| Runtime dependencies | Zero | Zero for per-method packages |
-| Modules | ESM and CommonJS | CommonJS per-method packages |
+| Capability                                   | temporize                          | lodash.debounce / lodash.throttle      |
+| -------------------------------------------- | ---------------------------------- | -------------------------------------- |
+| Inferred arguments and resolved return value | Full generic inference             | Types available separately             |
+| Per-call return                              | `Promise<Awaited<R>>`              | Last synchronous result or `undefined` |
+| Async error propagation                      | Native promise rejection           | Caller manages returned value          |
+| Cancellation                                 | `.cancel()` and `AbortSignal`      | `.cancel()`                            |
+| Maximum debounce wait                        | Yes                                | Yes                                    |
+| Promise queue rate limiter                   | `throttlePromise`                  | No                                     |
+| Async overlap policy                         | `debounceAsync`                    | No                                     |
+| Animation-frame throttling                   | Browser API plus Node fallback     | No                                     |
+| Multi-call argument batching                 | `batch`                            | No                                     |
+| Exponential-backoff retries                  | `retry`                            | No                                     |
+| Idle-period scheduling                       | `idle` with Safari/Node fallback   | No                                     |
+| Concurrent promise limiting                  | `concurrencyLimit` with FIFO queue | No                                     |
+| Runtime dependencies                         | Zero                               | Zero for per-method packages           |
+| Modules                                      | ESM and CommonJS                   | CommonJS per-method packages           |
 
 ### Scope
 
@@ -44,10 +50,14 @@ decision, not an omission.
 ```ts
 import { debounce } from "@alsoftworks/temporize";
 
-const search = debounce(async (query: string) => {
-  const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-  return response.json() as Promise<{ total: number }>;
-}, 250, { maxWait: 1_000 });
+const search = debounce(
+  async (query: string) => {
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    return response.json() as Promise<{ total: number }>;
+  },
+  250,
+  { maxWait: 1_000 },
+);
 
 const result = await search("type inference");
 console.log(result.total);
@@ -216,12 +226,12 @@ Retries use exponential backoff and randomized jitter by default. Supply
 ```ts
 import { idle } from "@alsoftworks/temporize";
 
-const recordAnalytics = idle((eventName: string, properties: object) => {
-  navigator.sendBeacon(
-    "/analytics",
-    JSON.stringify({ eventName, properties }),
-  );
-}, { timeout: 2_000 });
+const recordAnalytics = idle(
+  (eventName: string, properties: object) => {
+    navigator.sendBeacon("/analytics", JSON.stringify({ eventName, properties }));
+  },
+  { timeout: 2_000 },
+);
 
 recordAnalytics("dashboard_viewed", { source: "navigation" });
 ```
@@ -229,6 +239,28 @@ recordAnalytics("dashboard_viewed", { source: "navigation" });
 Rapid calls are coalesced using the latest arguments and deferred until the
 browser is idle. Safari, Node, and other environments without
 `requestIdleCallback` use a 1 ms timer fallback.
+
+### `concurrencyLimit`
+
+```ts
+import { concurrencyLimit } from "@alsoftworks/temporize";
+
+const upload = concurrencyLimit(async (file: File) => {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch("/api/uploads", { method: "POST", body });
+  if (!response.ok) throw new Error(`Upload failed: ${file.name}`);
+  return response.json();
+}, 3);
+
+const uploaded = await Promise.all(files.map(upload));
+console.log(upload.pending(), upload.queued());
+```
+
+At most three uploads start together. Excess calls wait in FIFO order.
+`upload.cancel()` rejects queued calls, but deliberately lets uploads already in
+flight finish because the wrapped function may not be cancellable. Later calls
+can be queued normally; aborting the configured signal also rejects future calls.
 
 ## Framework Adapters
 
@@ -274,6 +306,7 @@ trailing work when the component unmounts.
 
 ```tsx
 import { useEffect, useState } from "react";
+import { TemporizeAbortError } from "@alsoftworks/temporize";
 import { useThrottle } from "@alsoftworks/temporize/react";
 
 export function ScrollPosition(): JSX.Element {
@@ -285,7 +318,7 @@ export function ScrollPosition(): JSX.Element {
   useEffect(() => {
     const handleScroll = () => {
       void updatePosition(window.scrollY).catch((error: unknown) => {
-        if (!(error instanceof Error && error.name === "AbortError")) throw error;
+        if (!(error instanceof TemporizeAbortError)) throw error;
       });
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -335,6 +368,7 @@ through Vue's `onUnmounted` lifecycle automatically.
 ```vue
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
+import { TemporizeAbortError } from "@alsoftworks/temporize";
 import { useThrottle } from "@alsoftworks/temporize/vue";
 
 const position = ref(0);
@@ -344,7 +378,7 @@ const updatePosition = useThrottle((next: number) => {
 
 const handleScroll = () => {
   void updatePosition(window.scrollY).catch((error: unknown) => {
-    if (!(error instanceof Error && error.name === "AbortError")) throw error;
+    if (!(error instanceof TemporizeAbortError)) throw error;
   });
 };
 
@@ -367,8 +401,8 @@ library retains zero framework and runtime dependencies.
 
 Returns `(...args) => Promise<Awaited<R>>` with:
 
-- `cancel(): void` clears the timer and rejects calls waiting to run with an
-  error whose name is `AbortError`. It does not stop work already invoked.
+- `cancel(): void` clears the timer and rejects calls waiting to run with a
+  `TemporizeAbortError`. It does not stop work already invoked.
 - `flush(): Promise<Awaited<R>> | undefined` immediately runs pending trailing
   work and returns the shared result promise. It returns the most recent result
   when no work is pending, or `undefined` before any invocation exists.
@@ -376,12 +410,12 @@ Returns `(...args) => Promise<Awaited<R>>` with:
 
 `DebounceOptions`:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `leading` | `false` | Invoke at the beginning of the quiet window. |
-| `trailing` | `true` | Invoke with the latest arguments at its end. |
-| `maxWait` | none | Force an invocation during a continuous call stream. Values below `wait` are clamped to `wait`. |
-| `signal` | none | Cancel pending work on abort and reject calls made after abort. |
+| Option     | Default | Meaning                                                                                         |
+| ---------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `leading`  | `false` | Invoke at the beginning of the quiet window.                                                    |
+| `trailing` | `true`  | Invoke with the latest arguments at its end.                                                    |
+| `maxWait`  | none    | Force an invocation during a continuous call stream. Values below `wait` are clamped to `wait`. |
+| `signal`   | none    | Cancel pending work on abort and reject calls made after abort.                                 |
 
 Negative and non-finitely falsy waits are treated as zero. A zero-wait trailing
 call still runs in a later timer task.
@@ -391,11 +425,11 @@ call still runs in a later timer task.
 Returns the same promise function and lifecycle methods as `debounce`.
 `ThrottleOptions`:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `leading` | `true` | Invoke at the beginning of the first window. |
-| `trailing` | `true` | Invoke at the end with the latest suppressed call. |
-| `signal` | none | Cancel pending work on abort and reject calls made after abort. |
+| Option     | Default | Meaning                                                         |
+| ---------- | ------- | --------------------------------------------------------------- |
+| `leading`  | `true`  | Invoke at the beginning of the first window.                    |
+| `trailing` | `true`  | Invoke at the end with the latest suppressed call.              |
+| `signal`   | none    | Cancel pending work on abort and reject calls made after abort. |
 
 ### `rafThrottle(fn)`
 
@@ -407,8 +441,8 @@ coalesced and the latest arguments and `this` value are used.
 Returns the same lifecycle shape as `debounce`. `DebounceAsyncOptions` includes
 all `DebounceOptions` plus:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
+| Option    | Default   | Meaning                                                                             |
+| --------- | --------- | ----------------------------------------------------------------------------------- |
 | `overlap` | `"queue"` | Use `"queue"`, `"drop"`, or `"cancel-previous"` when a firing overlaps active work. |
 
 Calling `.cancel()` rejects scheduled debounce work and overlap jobs that are
@@ -426,10 +460,10 @@ Returns `(...args) => Promise<Awaited<R>>` with:
 
 `ThrottlePromiseOptions`:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `leading` | `true` | Start the first queued call immediately; when false, wait one window. |
-| `signal` | none | Cancel queued work on abort and reject calls made after abort. |
+| Option    | Default | Meaning                                                               |
+| --------- | ------- | --------------------------------------------------------------------- |
+| `leading` | `true`  | Start the first queued call immediately; when false, wait one window. |
+| `signal`  | none    | Cancel queued work on abort and reject calls made after abort.        |
 
 ### `batch(fn, wait, options?)`
 
@@ -443,10 +477,10 @@ Returns `(...args) => Promise<R>` with:
 
 `BatchOptions`:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
+| Option    | Default   | Meaning                                                                         |
+| --------- | --------- | ------------------------------------------------------------------------------- |
 | `maxSize` | unlimited | Fire immediately when the queue reaches this size. Values below `1` become `1`. |
-| `signal` | none | Cancel queued work on abort and reject calls made after abort. |
+| `signal`  | none      | Cancel queued work on abort and reject calls made after abort.                  |
 
 The wrapped function receives `Args[]`, preserving every call's complete
 argument tuple. It runs only once per batch, so all callers in that batch settle
@@ -455,20 +489,21 @@ with the same result or error.
 ### `retry(fn, options?)`
 
 Returns an async function with the same inferred arguments and resolved result.
-The first successful attempt resolves the call. Exhaustion rejects with the
-last error received, and aborting rejects immediately with `AbortError`.
+The first successful attempt resolves the call. Exhaustion rejects with a
+`TemporizeTimeoutError` whose `attempts` and `cause` expose the attempt count
+and last failure. Aborting rejects immediately with `TemporizeAbortError`.
 
 `RetryOptions`:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `attempts` | `3` | Maximum total invocations, including the first. |
-| `baseDelay` | `200` | Delay in milliseconds after the first failure. |
-| `maxDelay` | `5000` | Maximum delay between attempts. |
-| `factor` | `2` | Exponential multiplier for each subsequent delay. |
-| `jitter` | `true` | Randomize each delay between zero and its calculated value. |
+| Option        | Default           | Meaning                                                                  |
+| ------------- | ----------------- | ------------------------------------------------------------------------ |
+| `attempts`    | `3`               | Maximum total invocations, including the first.                          |
+| `baseDelay`   | `200`             | Delay in milliseconds after the first failure.                           |
+| `maxDelay`    | `5000`            | Maximum delay between attempts.                                          |
+| `factor`      | `2`               | Exponential multiplier for each subsequent delay.                        |
+| `jitter`      | `true`            | Randomize each delay between zero and its calculated value.              |
 | `shouldRetry` | retry every error | Decide whether a failure and its one-based attempt number are retryable. |
-| `signal` | none | Abort an active wait and prevent future attempts. |
+| `signal`      | none              | Abort an active wait and prevent future attempts.                        |
 
 ### `idle(fn, options?)`
 
@@ -477,12 +512,33 @@ runs are coalesced using the latest arguments and `this` value.
 
 `IdleOptions`:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
+| Option    | Default         | Meaning                                               |
+| --------- | --------------- | ----------------------------------------------------- |
 | `timeout` | browser default | Native `requestIdleCallback` timeout in milliseconds. |
 
 When idle callbacks are unavailable, scheduling falls back to `setTimeout(fn,
 1)`.
+
+### `concurrencyLimit(fn, max, options?)`
+
+Returns `(...args) => Promise<R>` with:
+
+- `cancel(): void` rejects queued calls without interrupting work already in
+  flight; later calls remain usable.
+- `pending(): number` returns the number of running calls.
+- `queued(): number` returns the number of calls waiting for a slot.
+
+Calls start in FIFO order as slots become available. `max` must be a positive
+integer and invalid values throw a synchronous `TypeError`. Passing
+`{ signal }` applies the same queued-only cancellation rule and preserves the
+signal's abort reason on `TemporizeAbortError.reason`.
+
+### Errors
+
+`TemporizeAbortError` identifies cancellation by `.cancel()` or an
+`AbortSignal`. Its `reason` and `cause` preserve a supplied signal reason.
+`TemporizeTimeoutError` identifies exhausted retries and exposes `attempts`
+plus the last underlying error through `cause`.
 
 ## Size and builds
 
@@ -490,9 +546,9 @@ When idle callbacks are unavailable, scheduling falls back to `setTimeout(fn,
 The implementation is tree-shakeable (`sideEffects: false`) and has no runtime
 dependencies. The core exports are designed to remain below 1 kB each after
 minification and gzip when consumed individually. Current tree-shaken ESM
-measurements with esbuild are: `debounce` 717 B, `throttle` 755 B,
-`rafThrottle` 236 B, `throttlePromise` 546 B, `debounceAsync` 992 B, `batch`
-505 B, `retry` 583 B, and `idle` 241 B.
+measurements with esbuild are: `debounce` 721 B, `throttle` 759 B,
+`rafThrottle` 236 B, `throttlePromise` 559 B, `debounceAsync` 997 B, `batch`
+512 B, `retry` 662 B, `idle` 241 B, and `concurrencyLimit` 526 B.
 `debounceAsync` is closest to the budget because its concurrency state machine
 and internal AbortController must cover all three overlap policies.
 
@@ -500,8 +556,8 @@ Use a bundle analyzer in the final application because shared helpers, module
 format wrappers, and bundler chunking affect attributed per-export sizes.
 
 The optional adapters are measured as independent, minified ESM bundles with
-their framework peer externalized. The React entry is 1,185 B gzipped and the
-Vue entry is 1,105 B gzipped. Both include the core scheduling code they use
+their framework peer externalized. The React entry is 1,169 B gzipped and the
+Vue entry is 1,089 B gzipped. Both include the core scheduling code they use
 and remain below the separate 1.5 kB adapter budget.
 
 ## Development
@@ -509,7 +565,9 @@ and remain below the separate 1.5 kB adapter budget.
 ```sh
 npm test
 npm run typecheck
+npm run lint
 npm run build
+npm run size
 npm run bench
 ```
 
@@ -523,6 +581,9 @@ package's `devDependencies`, so contributors running a normal `npm install`
 receive the adapter test stack. Package consumers do not: React and Vue are
 optional peers, stay external in adapter builds, and never enter the core
 bundle.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution requirements and
+[CHANGELOG.md](./CHANGELOG.md) for release history.
 
 The tinybench benchmark measures raw wrapper dispatch overhead against the
 standalone `lodash.debounce` and `lodash.throttle` packages. It intentionally

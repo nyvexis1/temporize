@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { rafThrottle, throttle, throttlePromise } from "../src";
+import { rafThrottle, TemporizeAbortError, throttle, throttlePromise } from "../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -31,7 +31,7 @@ describe("throttle", () => {
 
     const cancelled = wrapped("never");
     wrapped.cancel();
-    await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+    await expect(cancelled).rejects.toBeInstanceOf(TemporizeAbortError);
   });
 
   it("survives a call stream faster than event-loop timer drainage", async () => {
@@ -50,7 +50,7 @@ describe("throttle", () => {
     const controller = new AbortController();
     controller.abort();
     const wrapped = throttle(() => 1, 10, { signal: controller.signal });
-    await expect(wrapped()).rejects.toMatchObject({ name: "AbortError" });
+    await expect(wrapped()).rejects.toBeInstanceOf(TemporizeAbortError);
   });
 });
 
@@ -58,10 +58,13 @@ describe("rafThrottle", () => {
   it("coalesces to the latest call and can cancel a frame", () => {
     let callback: FrameRequestCallback | undefined;
     const cancel = vi.fn();
-    vi.stubGlobal("requestAnimationFrame", vi.fn((next: FrameRequestCallback) => {
-      callback = next;
-      return 7;
-    }));
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      vi.fn((next: FrameRequestCallback) => {
+        callback = next;
+        return 7;
+      }),
+    );
     vi.stubGlobal("cancelAnimationFrame", cancel);
     const fn = vi.fn<(value: number) => void>();
     const wrapped = rafThrottle(fn);
@@ -118,13 +121,16 @@ describe("throttlePromise", () => {
 
     const cancelled = wrapped(2);
     wrapped.cancel();
-    await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+    await expect(cancelled).rejects.toBeInstanceOf(TemporizeAbortError);
 
     const controller = new AbortController();
-    const signaled = throttlePromise(() => 1, 20, { leading: false, signal: controller.signal });
+    const signaled = throttlePromise(() => 1, 20, {
+      leading: false,
+      signal: controller.signal,
+    });
     const pending = signaled();
     controller.abort();
-    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-    await expect(signaled()).rejects.toMatchObject({ name: "AbortError" });
+    await expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
+    await expect(signaled()).rejects.toBeInstanceOf(TemporizeAbortError);
   });
 });

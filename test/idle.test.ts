@@ -50,7 +50,9 @@ describe("idle", () => {
 
     wrapped(1);
     wrapped(2);
-    expect(requestIdleCallback).toHaveBeenCalledWith(expect.any(Function), { timeout: 500 });
+    expect(requestIdleCallback).toHaveBeenCalledWith(expect.any(Function), {
+      timeout: 500,
+    });
     callback?.();
     expect(fn).toHaveBeenCalledOnce();
     expect(fn).toHaveBeenCalledWith(2);

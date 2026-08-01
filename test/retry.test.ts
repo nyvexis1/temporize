@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { retry } from "../src";
+import { retry, TemporizeAbortError, TemporizeTimeoutError } from "../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -9,7 +9,8 @@ afterEach(() => {
 describe("retry", () => {
   it("succeeds after failures and preserves inferred arguments", async () => {
     vi.useFakeTimers();
-    const fn = vi.fn<(value: number) => Promise<number>>()
+    const fn = vi
+      .fn<(value: number) => Promise<number>>()
       .mockRejectedValueOnce(new Error("first"))
       .mockRejectedValueOnce(new Error("second"))
       .mockResolvedValue(8);
@@ -22,19 +23,25 @@ describe("retry", () => {
     expect(fn).toHaveBeenNthCalledWith(1, 4);
   });
 
-  it("rejects with the last error after exhausting attempts", async () => {
+  it("rejects with a timeout error carrying the last failure after exhausting attempts", async () => {
     vi.useFakeTimers();
     const errors = [new Error("first"), new Error("second"), new Error("last")];
-    const fn = vi.fn<() => Promise<never>>()
+    const fn = vi
+      .fn<() => Promise<never>>()
       .mockRejectedValueOnce(errors[0])
       .mockRejectedValueOnce(errors[1])
       .mockRejectedValueOnce(errors[2]);
     const wrapped = retry(fn, { attempts: 3, baseDelay: 1, jitter: false });
     const result = wrapped();
-    const rejection = expect(result).rejects.toBe(errors[2]);
+    const rejection = expect(result).rejects.toMatchObject({
+      name: "TemporizeTimeoutError",
+      attempts: 3,
+      cause: errors[2],
+    });
 
     await vi.advanceTimersByTimeAsync(3);
     await rejection;
+    await expect(result).rejects.toBeInstanceOf(TemporizeTimeoutError);
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
@@ -60,7 +67,7 @@ describe("retry", () => {
       signal: controller.signal,
     });
     const result = wrapped();
-    const rejection = expect(result).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(result).rejects.toBeInstanceOf(TemporizeAbortError);
     await vi.advanceTimersByTimeAsync(0);
 
     controller.abort();
@@ -98,7 +105,7 @@ describe("retry", () => {
     const fn = vi.fn(async () => 1);
     const wrapped = retry(fn, { signal: controller.signal });
 
-    await expect(wrapped()).rejects.toMatchObject({ name: "AbortError" });
+    await expect(wrapped()).rejects.toBeInstanceOf(TemporizeAbortError);
     expect(fn).not.toHaveBeenCalled();
   });
 });

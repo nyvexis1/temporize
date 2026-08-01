@@ -4,7 +4,7 @@ import { mount } from "@vue/test-utils";
 import { defineComponent, h, type PropType } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useDebounce, useThrottle } from "../../src/vue";
-import type { DebouncedFunction } from "../../src";
+import { TemporizeAbortError, type DebouncedFunction } from "../../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -43,14 +43,16 @@ describe("Vue useDebounce", () => {
     vi.useFakeTimers();
     const fn = vi.fn();
     let callback: DebouncedFunction<[string], void> | undefined;
-    const wrapper = mount(defineComponent({
-      setup() {
-        callback = useDebounce(fn, 20);
-        return () => null;
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          callback = useDebounce(fn, 20);
+          return () => null;
+        },
+      }),
+    );
     const pending = callback?.("value");
-    const rejection = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
 
     wrapper.unmount();
     await rejection;
@@ -64,14 +66,16 @@ describe("Vue useThrottle", () => {
     vi.useFakeTimers();
     const fn = vi.fn();
     let callback: DebouncedFunction<[number], void> | undefined;
-    const wrapper = mount(defineComponent({
-      setup() {
-        callback = useThrottle(fn, 20, { leading: false });
-        return () => null;
-      },
-    }));
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          callback = useThrottle(fn, 20, { leading: false });
+          return () => null;
+        },
+      }),
+    );
     const pending = callback?.(1);
-    const rejection = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
 
     wrapper.unmount();
     await rejection;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { debounceAsync } from "../src";
+import { debounceAsync, TemporizeAbortError } from "../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -10,11 +10,15 @@ describe("debounceAsync", () => {
     vi.useFakeTimers();
     const releases: Array<() => void> = [];
     const starts: number[] = [];
-    const wrapped = debounceAsync(async (value: number) => {
-      starts.push(value);
-      await new Promise<void>((resolve) => releases.push(resolve));
-      return value;
-    }, 5, { overlap: "queue" });
+    const wrapped = debounceAsync(
+      async (value: number) => {
+        starts.push(value);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        return value;
+      },
+      5,
+      { overlap: "queue" },
+    );
 
     const first = wrapped(1);
     await vi.advanceTimersByTimeAsync(5);
@@ -31,9 +35,12 @@ describe("debounceAsync", () => {
   it("drops overlapping work onto the active invocation promise", async () => {
     vi.useFakeTimers();
     let release: ((value: number) => void) | undefined;
-    const fn = vi.fn(() => new Promise<number>((resolve) => {
-      release = resolve;
-    }));
+    const fn = vi.fn(
+      () =>
+        new Promise<number>((resolve) => {
+          release = resolve;
+        }),
+    );
     const wrapped = debounceAsync(fn, 5, { overlap: "drop" });
     const first = wrapped();
     await vi.advanceTimersByTimeAsync(5);
@@ -71,6 +78,6 @@ describe("debounceAsync", () => {
     const wrapped = debounceAsync(async (value: number) => value, 10);
     const pending = wrapped(1);
     wrapped.cancel();
-    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
   });
 });

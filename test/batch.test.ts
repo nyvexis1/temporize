@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { batch } from "../src";
+import { batch, TemporizeAbortError } from "../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -9,7 +9,8 @@ describe("batch", () => {
   it("collects argument tuples and shares one invocation result", async () => {
     vi.useFakeTimers();
     const fn = vi.fn((calls: Array<[string, number]>) =>
-      calls.map(([name, count]) => `${name}:${count}`).join(","));
+      calls.map(([name, count]) => `${name}:${count}`).join(","),
+    );
     const wrapped = batch(fn, 20);
     const first = wrapped("one", 1);
     const second = wrapped("two", 2);
@@ -21,7 +22,10 @@ describe("batch", () => {
     await expect(first).resolves.toBe("one:1,two:2");
     await expect(second).resolves.toBe("one:1,two:2");
     expect(fn).toHaveBeenCalledOnce();
-    expect(fn).toHaveBeenCalledWith([["one", 1], ["two", 2]]);
+    expect(fn).toHaveBeenCalledWith([
+      ["one", 1],
+      ["two", 2],
+    ]);
     expect(wrapped.pending()).toBe(false);
     expect(wrapped.size()).toBe(0);
   });
@@ -40,7 +44,9 @@ describe("batch", () => {
 
   it("supports flush, pending, size, and cancellation", async () => {
     vi.useFakeTimers();
-    const fn = vi.fn((calls: Array<[number]>) => calls.reduce((sum, [value]) => sum + value, 0));
+    const fn = vi.fn((calls: Array<[number]>) =>
+      calls.reduce((sum, [value]) => sum + value, 0),
+    );
     const wrapped = batch(fn, 100);
     const first = wrapped(2);
     const second = wrapped(3);
@@ -53,7 +59,7 @@ describe("batch", () => {
     expect(vi.getTimerCount()).toBe(0);
 
     const cancelled = wrapped(4);
-    const rejection = expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(cancelled).rejects.toBeInstanceOf(TemporizeAbortError);
     wrapped.cancel();
     await rejection;
     expect(wrapped.size()).toBe(0);
@@ -66,17 +72,17 @@ describe("batch", () => {
     const fn = vi.fn(() => 1);
     const wrapped = batch(fn, 20, { signal: controller.signal });
     const pending = wrapped("queued");
-    const rejection = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const rejection = expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
     controller.abort();
 
     await rejection;
-    await expect(wrapped("later")).rejects.toMatchObject({ name: "AbortError" });
+    await expect(wrapped("later")).rejects.toBeInstanceOf(TemporizeAbortError);
     await vi.advanceTimersByTimeAsync(20);
     expect(fn).not.toHaveBeenCalled();
 
     const already = new AbortController();
     already.abort();
     const preAborted = batch(() => 1, 0, { signal: already.signal });
-    await expect(preAborted()).rejects.toMatchObject({ name: "AbortError" });
+    await expect(preAborted()).rejects.toBeInstanceOf(TemporizeAbortError);
   });
 });

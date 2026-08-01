@@ -1,4 +1,13 @@
-/** Options that control when a debounced function is invoked. */
+import { TemporizeAbortError } from "./errors";
+
+/**
+ * Options that control when a debounced function is invoked.
+ *
+ * @example
+ * ```ts
+ * const options: DebounceOptions = { trailing: true, maxWait: 1_000 };
+ * ```
+ */
 export interface DebounceOptions {
   /** Invoke on the leading edge of the wait window. Defaults to `false`. */
   leading?: boolean;
@@ -10,7 +19,14 @@ export interface DebounceOptions {
   signal?: AbortSignal;
 }
 
-/** A promise-returning debounced function with lifecycle controls. */
+/**
+ * A promise-returning debounced function with lifecycle controls.
+ *
+ * @example
+ * ```ts
+ * const save: DebouncedFunction<[string], void> = debounce(saveText, 200);
+ * ```
+ */
 export interface DebouncedFunction<Args extends unknown[], Result> {
   /** Schedule an invocation and resolve with the wrapped function's result. */
   (...args: Args): Promise<Result>;
@@ -27,16 +43,6 @@ type Deferred<Result> = {
   reject: (reason?: unknown) => void;
 };
 
-/** Create a portable abort-shaped error for internal cancellation paths. @internal */
-export function abortError(): Error {
-  if (typeof DOMException === "function") {
-    return new DOMException("The operation was aborted", "AbortError");
-  }
-  const error = new Error("The operation was aborted");
-  error.name = "AbortError";
-  return error;
-}
-
 /**
  * Delay a function until calls stop for `wait` milliseconds while preserving
  * its inferred arguments, `this` value, return value, and errors. Calls that
@@ -45,7 +51,16 @@ export function abortError(): Error {
  * @param fn Function to debounce. It may return either a value or a promise.
  * @param wait Quiet period in milliseconds. Negative values are treated as `0`.
  * @param options Leading, trailing, maximum-wait, and cancellation settings.
+ * @param options.leading Whether to invoke on the leading edge.
+ * @param options.trailing Whether to invoke on the trailing edge.
+ * @param options.maxWait Maximum time repeated calls may postpone invocation.
+ * @param options.signal Signal that cancels scheduled and future calls.
  * @returns A promise-returning function with `cancel`, `flush`, and `pending`.
+ * @example
+ * ```ts
+ * const search = debounce(fetchResults, 250, { maxWait: 1_000 });
+ * const results = await search("temporize");
+ * ```
  */
 export function debounce<Args extends unknown[], Result>(
   fn: (...args: Args) => Result | PromiseLike<Result>,
@@ -130,19 +145,21 @@ export function debounce<Args extends unknown[], Result>(
     return leading ? invoke(time) : lastResult;
   };
 
-  const cancel = (): void => {
+  const cancel = (reason?: unknown): void => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
     lastArgs = undefined;
     lastThis = undefined;
     lastCallTime = undefined;
     lastInvokeTime = 0;
-    const error = abortError();
+    const error = new TemporizeAbortError(reason);
     for (const item of waiters.splice(0)) item.reject(error);
   };
 
   const debounced = function (this: unknown, ...args: Args): Promise<Awaited<Result>> {
-    if (options.signal?.aborted) return Promise.reject(abortError());
+    if (options.signal?.aborted) {
+      return Promise.reject(new TemporizeAbortError(options.signal.reason));
+    }
     const time = Date.now();
     const invokeNow = shouldInvoke(time);
     lastArgs = args;
@@ -166,13 +183,15 @@ export function debounce<Args extends unknown[], Result>(
     return promise;
   } as DebouncedFunction<Args, Awaited<Result>>;
 
-  debounced.cancel = cancel;
+  debounced.cancel = () => cancel(options.signal?.reason);
   debounced.flush = () => {
     if (timer === undefined) return lastResult;
     clearTimeout(timer);
     return trailingEdge(Date.now());
   };
   debounced.pending = () => timer !== undefined && lastArgs !== undefined;
-  options.signal?.addEventListener("abort", cancel, { once: true });
+  options.signal?.addEventListener("abort", debounced.cancel, {
+    once: true,
+  });
   return debounced;
 }

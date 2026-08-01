@@ -1,10 +1,24 @@
-/** Options passed to idle-period scheduling. */
+/**
+ * Options passed to idle-period scheduling.
+ *
+ * @example
+ * ```ts
+ * const options: IdleOptions = { timeout: 1_000 };
+ * ```
+ */
 export interface IdleOptions {
   /** Maximum milliseconds to wait before the idle callback must run. */
   timeout?: number;
 }
 
-/** An idle-coalesced void function that can discard scheduled work. */
+/**
+ * An idle-coalesced void function that can discard scheduled work.
+ *
+ * @example
+ * ```ts
+ * const persist: IdleFunction<[State]> = idle(saveState);
+ * ```
+ */
 export interface IdleFunction<Args extends unknown[]> {
   /** Schedule the latest arguments for the next idle period. */
   (...args: Args): void;
@@ -27,15 +41,22 @@ type IdleHost = typeof globalThis & {
  *
  * @param fn Non-critical function to invoke when the environment is idle.
  * @param options Optional native idle-callback timeout setting.
+ * @param options.timeout Maximum wait passed to native `requestIdleCallback`.
  * @returns A void function with a `cancel` method.
+ * @example
+ * ```ts
+ * const saveWhenIdle = idle(saveDraft, { timeout: 2_000 });
+ * saveWhenIdle(draft);
+ * ```
  */
 export function idle<Args extends unknown[]>(
   fn: (...args: Args) => void,
   options: IdleOptions = {},
 ): IdleFunction<Args> {
   const host = globalThis as IdleHost;
-  const hasIdleCallback = typeof host.requestIdleCallback === "function"
-    && typeof host.cancelIdleCallback === "function";
+  const hasIdleCallback =
+    typeof host.requestIdleCallback === "function" &&
+    typeof host.cancelIdleCallback === "function";
   let handle: number | ReturnType<typeof setTimeout> | undefined;
   let args: Args;
   let thisArg: unknown;

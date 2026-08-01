@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { debounce } from "../src";
+import { debounce, TemporizeAbortError } from "../src";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -92,23 +92,25 @@ describe("debounce", () => {
 
     const cancelled = wrapped(9);
     wrapped.cancel();
-    await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+    await expect(cancelled).rejects.toBeInstanceOf(TemporizeAbortError);
     expect(wrapped.pending()).toBe(false);
   });
 
   it("honors AbortSignal, including a signal already aborted at call time", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();
-    const wrapped = debounce((value: number) => value, 10, { signal: controller.signal });
+    const wrapped = debounce((value: number) => value, 10, {
+      signal: controller.signal,
+    });
     const pending = wrapped(1);
     controller.abort();
-    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-    await expect(wrapped(2)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
+    await expect(wrapped(2)).rejects.toBeInstanceOf(TemporizeAbortError);
 
     const already = new AbortController();
     already.abort();
     const preAborted = debounce(() => 1, 0, { signal: already.signal });
-    await expect(preAborted()).rejects.toMatchObject({ name: "AbortError" });
+    await expect(preAborted()).rejects.toBeInstanceOf(TemporizeAbortError);
   });
 
   it("defers wait=0 trailing work to the next task", async () => {

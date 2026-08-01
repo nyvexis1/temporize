@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  debounce,
-  type DebounceOptions,
-  type DebouncedFunction,
-} from "../debounce";
+import { TemporizeAbortError } from "../errors";
+import { debounce, type DebounceOptions, type DebouncedFunction } from "../debounce";
 import {
   rafThrottle,
   throttle,
@@ -12,7 +9,7 @@ import {
 } from "../throttle";
 
 function ignoreAbort(error: unknown): void {
-  if (!(typeof error === "object" && error !== null && "name" in error && error.name === "AbortError")) {
+  if (!(error instanceof TemporizeAbortError)) {
     throw error;
   }
 }
@@ -25,7 +22,15 @@ function ignoreAbort(error: unknown): void {
  * @param fn Callback to debounce. Sync and async return values are preserved.
  * @param wait Quiet period in milliseconds.
  * @param options Leading, trailing, maximum-wait, and cancellation settings.
+ * @param options.leading Whether to invoke on the leading edge.
+ * @param options.trailing Whether to invoke on the trailing edge.
+ * @param options.maxWait Maximum time repeated calls may postpone invocation.
+ * @param options.signal Signal that cancels scheduled and future calls.
  * @returns A fully inferred debounced function with lifecycle methods.
+ * @example
+ * ```tsx
+ * const save = useDebounce(saveDraft, 300);
+ * ```
  */
 export function useDebounce<Args extends unknown[], Result>(
   fn: (...args: Args) => Result | PromiseLike<Result>,
@@ -36,12 +41,13 @@ export function useDebounce<Args extends unknown[], Result>(
   fnRef.current = fn;
   const { leading, trailing, maxWait, signal } = options;
   const wrapped = useMemo(
-    () => debounce((...args: Args) => fnRef.current(...args), wait, {
-      leading,
-      trailing,
-      maxWait,
-      signal,
-    }),
+    () =>
+      debounce((...args: Args) => fnRef.current(...args), wait, {
+        leading,
+        trailing,
+        maxWait,
+        signal,
+      }),
     [wait, leading, trailing, maxWait, signal],
   );
 
@@ -57,7 +63,14 @@ export function useDebounce<Args extends unknown[], Result>(
  * @param fn Callback to throttle. Sync and async return values are preserved.
  * @param wait Minimum interval between invocations in milliseconds.
  * @param options Leading, trailing, and cancellation settings.
+ * @param options.leading Whether to invoke on the leading edge.
+ * @param options.trailing Whether to invoke on the trailing edge.
+ * @param options.signal Signal that cancels scheduled and future calls.
  * @returns A fully inferred throttled function with lifecycle methods.
+ * @example
+ * ```tsx
+ * const onScroll = useThrottle(updatePosition, 100);
+ * ```
  */
 export function useThrottle<Args extends unknown[], Result>(
   fn: (...args: Args) => Result | PromiseLike<Result>,
@@ -68,11 +81,12 @@ export function useThrottle<Args extends unknown[], Result>(
   fnRef.current = fn;
   const { leading, trailing, signal } = options;
   const wrapped = useMemo(
-    () => throttle((...args: Args) => fnRef.current(...args), wait, {
-      leading,
-      trailing,
-      signal,
-    }),
+    () =>
+      throttle((...args: Args) => fnRef.current(...args), wait, {
+        leading,
+        trailing,
+        signal,
+      }),
     [wait, leading, trailing, signal],
   );
 
@@ -88,7 +102,15 @@ export function useThrottle<Args extends unknown[], Result>(
  * @param value Value to debounce.
  * @param wait Quiet period in milliseconds.
  * @param options Standard debounce timing and cancellation settings.
+ * @param options.leading Whether to update on the leading edge.
+ * @param options.trailing Whether to update on the trailing edge.
+ * @param options.maxWait Maximum time repeated changes may postpone an update.
+ * @param options.signal Signal that cancels scheduled updates.
  * @returns The latest value whose debounce interval has completed.
+ * @example
+ * ```tsx
+ * const query = useDebouncedValue(input, 250);
+ * ```
  */
 export function useDebouncedValue<Value>(
   value: Value,
@@ -115,6 +137,10 @@ export function useDebouncedValue<Value>(
  *
  * @param fn Callback to coalesce to one invocation per animation frame.
  * @returns A stable void callback with a `cancel` method.
+ * @example
+ * ```tsx
+ * const onPointerMove = useRafThrottle(updatePointer);
+ * ```
  */
 export function useRafThrottle<Args extends unknown[]>(
   fn: (...args: Args) => void,

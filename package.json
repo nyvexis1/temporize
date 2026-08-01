@@ -1,0 +1,92 @@
+{
+  "name": "@alsoftworks/temporize",
+  "version": "0.1.0",
+  "description": "Typed, promise-aware debounce and throttle utilities with cancellation.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.cjs"
+    },
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "import": "./dist/vue/index.js",
+      "require": "./dist/vue/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/react/index.ts src/vue/index.ts --format esm,cjs --dts --clean --minify --treeshake",
+    "build:core": "tsup src/index.ts --format esm,cjs --dts --clean --minify --treeshake",
+    "test": "vitest run",
+    "test:core": "vitest run test/debounce.test.ts test/debounceAsync.test.ts test/throttle.test.ts",
+    "test:watch": "vitest",
+    "bench": "tsx bench/index.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm test && npm run typecheck && npm run build"
+  },
+  "keywords": [
+    "debounce",
+    "throttle",
+    "promise",
+    "typescript",
+    "abortsignal",
+    "react",
+    "react-hooks",
+    "vue",
+    "vue-composables"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "peerDependencies": {
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
+    "vue": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/react": "^14.3.1",
+    "@types/node": "^22.10.2",
+    "@types/lodash.debounce": "^4.0.9",
+    "@types/lodash.throttle": "^4.1.9",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^22.1.0",
+    "lodash.debounce": "^4.0.8",
+    "lodash.throttle": "^4.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tinybench": "^3.1.1",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10",
+    "vue": "^3.5.13"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "@alsoftworks/temporize",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Typed, promise-aware timing and concurrency utilities with cancellation.",
   "type": "module",
   "sideEffects": false,
@@ -29,6 +29,7 @@
     "README.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
+    "THIRD_PARTY_NOTICES.md",
     "LICENSE"
   ],
   "scripts": {

@@ -592,4 +592,6 @@ every call, which is part of its contract and part of the measured cost.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE). Third-party development and benchmark references
+are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); they are not
+included in Temporize's runtime bundles.

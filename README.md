@@ -23,8 +23,19 @@ npm install @alsoftworks/temporize
 | Promise queue rate limiter | `throttlePromise` | No |
 | Async overlap policy | `debounceAsync` | No |
 | Animation-frame throttling | Browser API plus Node fallback | No |
+| Multi-call argument batching | `batch` | No |
+| Exponential-backoff retries | `retry` | No |
+| Idle-period scheduling | `idle` with Safari/Node fallback | No |
 | Runtime dependencies | Zero | Zero for per-method packages |
 | Modules | ESM and CommonJS | CommonJS per-method packages |
+
+### Scope
+
+temporize deliberately focuses on controlling when and how often work runs.
+Debouncing, throttling, batching, retry timing, frame scheduling, and idle
+scheduling all belong to that family. Object, array, string, and other general
+utility helpers are intentionally out of scope; that boundary is a design
+decision, not an omission.
 
 ## Usage
 
@@ -142,6 +153,82 @@ console.log(await Promise.all(requests));
 Every call enters a FIFO queue and starts at least one window after the prior
 start. The queue limits dispatch rate, not concurrency: a slow promise may
 still be active when the next window begins.
+
+### `batch`
+
+```ts
+import { batch } from "@alsoftworks/temporize";
+
+const markNotificationsRead = batch(
+  async (calls: Array<[notificationId: string]>) => {
+    const ids = calls.map(([notificationId]) => notificationId);
+    const response = await fetch("/api/notifications/read", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!response.ok) throw new Error("Could not mark notifications as read");
+    return ids.length;
+  },
+  50,
+  { maxSize: 100 },
+);
+
+const first = markNotificationsRead("notification_1");
+const second = markNotificationsRead("notification_2");
+
+// Both promises resolve to 2 because both calls shared one batch invocation.
+console.log(await first, await second);
+```
+
+Unlike `debounce`, `batch` retains every argument tuple. The wrapped function
+runs once with the complete array, and every caller in that batch receives the
+same result or error.
+
+### `retry`
+
+```ts
+import { retry } from "@alsoftworks/temporize";
+
+const controller = new AbortController();
+const fetchJson = retry(
+  async (url: string) => {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    return response.json() as Promise<unknown>;
+  },
+  {
+    attempts: 4,
+    baseDelay: 250,
+    maxDelay: 2_000,
+    signal: controller.signal,
+  },
+);
+
+const data = await fetchJson("/api/flaky-report");
+```
+
+Retries use exponential backoff and randomized jitter by default. Supply
+`shouldRetry` when permanent errors should stop immediately.
+
+### `idle`
+
+```ts
+import { idle } from "@alsoftworks/temporize";
+
+const recordAnalytics = idle((eventName: string, properties: object) => {
+  navigator.sendBeacon(
+    "/analytics",
+    JSON.stringify({ eventName, properties }),
+  );
+}, { timeout: 2_000 });
+
+recordAnalytics("dashboard_viewed", { source: "navigation" });
+```
+
+Rapid calls are coalesced using the latest arguments and deferred until the
+browser is idle. Safari, Node, and other environments without
+`requestIdleCallback` use a 1 ms timer fallback.
 
 ## Framework Adapters
 
@@ -344,14 +431,68 @@ Returns `(...args) => Promise<Awaited<R>>` with:
 | `leading` | `true` | Start the first queued call immediately; when false, wait one window. |
 | `signal` | none | Cancel queued work on abort and reject calls made after abort. |
 
+### `batch(fn, wait, options?)`
+
+Returns `(...args) => Promise<R>` with:
+
+- `cancel(): void` rejects all calls still queued in the current batch.
+- `flush(): Promise<R> | undefined` immediately invokes queued work and returns
+  the shared result promise.
+- `pending(): boolean` reports whether the current batch contains calls.
+- `size(): number` returns the number of queued argument tuples.
+
+`BatchOptions`:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `maxSize` | unlimited | Fire immediately when the queue reaches this size. Values below `1` become `1`. |
+| `signal` | none | Cancel queued work on abort and reject calls made after abort. |
+
+The wrapped function receives `Args[]`, preserving every call's complete
+argument tuple. It runs only once per batch, so all callers in that batch settle
+with the same result or error.
+
+### `retry(fn, options?)`
+
+Returns an async function with the same inferred arguments and resolved result.
+The first successful attempt resolves the call. Exhaustion rejects with the
+last error received, and aborting rejects immediately with `AbortError`.
+
+`RetryOptions`:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `attempts` | `3` | Maximum total invocations, including the first. |
+| `baseDelay` | `200` | Delay in milliseconds after the first failure. |
+| `maxDelay` | `5000` | Maximum delay between attempts. |
+| `factor` | `2` | Exponential multiplier for each subsequent delay. |
+| `jitter` | `true` | Randomize each delay between zero and its calculated value. |
+| `shouldRetry` | retry every error | Decide whether a failure and its one-based attempt number are retryable. |
+| `signal` | none | Abort an active wait and prevent future attempts. |
+
+### `idle(fn, options?)`
+
+Returns a void function with `cancel(): void`. Calls before the idle callback
+runs are coalesced using the latest arguments and `this` value.
+
+`IdleOptions`:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `timeout` | browser default | Native `requestIdleCallback` timeout in milliseconds. |
+
+When idle callbacks are unavailable, scheduling falls back to `setTimeout(fn,
+1)`.
+
 ## Size and builds
 
 `npm run build` emits minified ESM, CommonJS, and declarations in `dist/`.
 The implementation is tree-shakeable (`sideEffects: false`) and has no runtime
 dependencies. The core exports are designed to remain below 1 kB each after
 minification and gzip when consumed individually. Current tree-shaken ESM
-measurements with esbuild are: `debounce` 715 B, `throttle` 753 B,
-`rafThrottle` 236 B, `throttlePromise` 546 B, and `debounceAsync` 992 B.
+measurements with esbuild are: `debounce` 717 B, `throttle` 755 B,
+`rafThrottle` 236 B, `throttlePromise` 546 B, `debounceAsync` 992 B, `batch`
+505 B, `retry` 583 B, and `idle` 241 B.
 `debounceAsync` is closest to the budget because its concurrency state machine
 and internal AbortController must cover all three overlap policies.
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-03
+
+### Added
+
+- `sample` for clock-driven latest-value snapshots without stale duplicate ticks.
+- `once` for shared, resettable single invocations with rejection recovery.
+- `timeout` for cooperative hard time budgets around async functions.
+- `poll` for condition-based async polling with attempt, deadline, and abort limits.
+
 ## [0.3.1] - 2026-08-01
 
 ### Changed
@@ -52,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vue composables under `@alsoftworks/temporize/vue`.
 - Dual ESM/CommonJS builds, TypeScript declarations, tests, and benchmarks.
 
-[unreleased]: https://github.com/nyvexis1/temporize/compare/v0.3.1...HEAD
+[unreleased]: https://github.com/nyvexis1/temporize/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nyvexis1/temporize/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nyvexis1/temporize/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nyvexis1/temporize/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nyvexis1/temporize/compare/v0.1.0...v0.2.0

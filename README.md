@@ -6,9 +6,9 @@
 [![bundle size](https://img.shields.io/bundlephobia/minzip/%40alsoftworks%2Ftemporize)](https://bundlephobia.com/package/@alsoftworks/temporize)
 
 Small, strongly typed timing and concurrency utilities for modern TypeScript.
-Every scheduled call returns a real promise for the wrapped function's actual
-result. There are no runtime dependencies, and the package ships as ESM and
-CommonJS.
+Promise-returning primitives preserve the wrapped function's actual result,
+while intentionally lossy schedulers use explicit void call signatures. There
+are no runtime dependencies, and the package ships as ESM and CommonJS.
 
 ## Install
 
@@ -32,16 +32,21 @@ npm install @alsoftworks/temporize
 | Exponential-backoff retries                  | `retry`                            | No                                     |
 | Idle-period scheduling                       | `idle` with Safari/Node fallback   | No                                     |
 | Concurrent promise limiting                  | `concurrencyLimit` with FIFO queue | No                                     |
+| Fixed-clock latest-value sampling            | `sample`                           | No                                     |
+| Shared one-time initialization               | `once`                             | No                                     |
+| Hard async waiting budget                    | `timeout`                          | No                                     |
+| Condition-based async polling                | `poll`                             | No                                     |
 | Runtime dependencies                         | Zero                               | Zero for per-method packages           |
 | Modules                                      | ESM and CommonJS                   | CommonJS per-method packages           |
 
 ### Scope
 
-temporize deliberately focuses on controlling when and how often work runs.
-Debouncing, throttling, batching, retry timing, frame scheduling, and idle
-scheduling all belong to that family. Object, array, string, and other general
-utility helpers are intentionally out of scope; that boundary is a design
-decision, not an omission.
+temporize deliberately focuses on controlling when, how often, and for how long
+work runs. Debouncing, throttling, sampling, batching, one-time execution,
+timeouts, polling, retries, concurrency limits, frame scheduling, and idle
+scheduling form that timing-control family. Object, array, string, and other
+general utility helpers are intentionally out of scope; that boundary is a
+design decision, not an omission.
 
 ## Usage
 
@@ -261,6 +266,95 @@ At most three uploads start together. Excess calls wait in FIFO order.
 `upload.cancel()` rejects queued calls, but deliberately lets uploads already in
 flight finish because the wrapped function may not be cancellable. Later calls
 can be queued normally; aborting the configured signal also rejects future calls.
+
+### `sample`
+
+```ts
+import { sample } from "@alsoftworks/temporize";
+
+const displayPrice = sample((price: number) => {
+  document.querySelector("#price")!.textContent = price.toFixed(2);
+}, 250);
+
+socket.addEventListener("message", (event) => {
+  const update = JSON.parse(event.data) as { price: number };
+  displayPrice(update.price);
+});
+
+socket.addEventListener("close", displayPrice.cancel);
+```
+
+The first update starts a fixed sampling clock. Each tick renders only the
+latest price received since the previous tick. A tick with no new update does
+nothing, avoiding duplicate renders with stale data.
+
+### `once`
+
+```ts
+import { once } from "@alsoftworks/temporize";
+
+const initializeApp = once(async () => {
+  const response = await fetch("/api/config");
+  if (!response.ok) throw new Error("Configuration failed");
+  return response.json() as Promise<{ region: string }>;
+});
+
+// Both callers share one initialization and receive the same configuration.
+const [fromRouter, fromDashboard] = await Promise.all([
+  initializeApp(),
+  initializeApp(),
+]);
+```
+
+A rejected initialization resets automatically, allowing the next caller to
+try again. Use `reset()` for an explicit new lifecycle or `resetAfter` for a
+time-limited shared result.
+
+### `timeout`
+
+```ts
+import { timeout } from "@alsoftworks/temporize";
+
+const fetchWithinBudget = timeout(
+  (url: string, signal?: AbortSignal) => fetch(url, { signal }),
+  2_000,
+);
+
+const response = await fetchWithinBudget("/api/report");
+```
+
+`timeout` gives up on one slow invocation; `retry` starts new invocations after
+failures. Timing out only stops the underlying fetch here because it observes
+the internally supplied signal. Functions that ignore the signal continue in
+the background while the caller receives `TemporizeTimeoutError`.
+
+### `poll`
+
+```ts
+import { poll } from "@alsoftworks/temporize";
+
+type Job = { id: string; status: "queued" | "running" | "done" };
+
+const waitForJob = poll(
+  async (id: string) => {
+    const response = await fetch(`/api/jobs/${id}`);
+    if (!response.ok) throw new Error(`Status failed: ${response.status}`);
+    return response.json() as Promise<Job>;
+  },
+  500,
+  {
+    until: (job) => job.status === "done",
+    attempts: 60,
+    timeout: 30_000,
+  },
+);
+
+const completed = await waitForJob("job_123");
+```
+
+A failed status request counts as an attempt and polling continues after the
+interval. Exhausting the attempt count or overall deadline rejects with
+`TemporizeTimeoutError`.
 
 ## Framework Adapters
 
@@ -533,12 +627,72 @@ integer and invalid values throw a synchronous `TypeError`. Passing
 `{ signal }` applies the same queued-only cancellation rule and preserves the
 signal's abort reason on `TemporizeAbortError.reason`.
 
+### `sample(fn, interval, options?)`
+
+Returns a void function with:
+
+- `cancel(): void` stops the clock and discards arguments waiting for a tick.
+- `flush(): Promise<Awaited<R>> | undefined` immediately invokes pending work.
+- `pending(): boolean` reports whether new arguments await the next tick.
+
+The clock starts lazily with the first call and stays fixed until cancellation.
+Only the latest arguments and `this` value received between ticks are retained.
+Ticks without new data do not invoke `fn`, preventing duplicate stale work.
+Because clock-triggered calls have no per-call promise, scheduled async
+functions should handle their own errors; errors from `flush()` are observable
+through its returned promise. `{ signal }` cancels the clock and makes later
+calls no-ops.
+
+### `once(fn, options?)`
+
+Returns `(...args) => Promise<Awaited<R>>` with:
+
+- `reset(): void` forgets the shared invocation and permits another one.
+- `invoked(): boolean` reports whether an invocation exists and has not reset.
+
+Concurrent and subsequent calls share the first invocation's result. Rejection
+automatically resets the wrapper so the next call retries. `resetAfter` starts
+when an invocation begins; after that duration, a new call may invoke `fn`
+again. `{ signal }` rejects callers waiting when it aborts and all later calls,
+without interrupting underlying work.
+
+### `timeout(fn, ms, options?)`
+
+Returns an async function with the wrapped function's inferred public arguments
+and resolved result. Expiration rejects with `TemporizeTimeoutError`, whose
+`attempts` is undefined because only one invocation occurred. An optional or
+required final `AbortSignal` declared by `fn` is supplied internally and omitted
+from the returned function's arguments.
+
+Timing out rejects the caller but cannot forcibly stop arbitrary promises. The
+internal signal lets cooperative operations such as `fetch` stop themselves.
+An external `{ signal }` rejects with `TemporizeAbortError` and also aborts that
+internal signal. Negative budgets become zero; `Infinity` disables the timeout
+while retaining external cancellation.
+
+### `poll(fn, interval, options?)`
+
+Returns an async function that repeatedly calls `fn` with the original
+arguments. `PollOptions<R>`:
+
+| Option     | Default          | Meaning                                                          |
+| ---------- | ---------------- | ---------------------------------------------------------------- |
+| `until`    | result is truthy | Accept a successful result and stop polling.                     |
+| `attempts` | unlimited        | Maximum calls, including rejected calls; values below `1` use 1. |
+| `timeout`  | unlimited        | Overall wall-clock budget across calls and interval waits.       |
+| `signal`   | none             | Abort active waiting and all future attempts.                    |
+
+A rejected invocation counts as an attempt and polling continues after the
+interval. Predicate errors propagate immediately. Attempts or time exhaustion
+rejects with `TemporizeTimeoutError`; `.attempts` contains calls already made
+and `.cause` contains the most recent invocation failure when available.
+
 ### Errors
 
 `TemporizeAbortError` identifies cancellation by `.cancel()` or an
 `AbortSignal`. Its `reason` and `cause` preserve a supplied signal reason.
-`TemporizeTimeoutError` identifies exhausted retries and exposes `attempts`
-plus the last underlying error through `cause`.
+`TemporizeTimeoutError` identifies expired timeouts, polls, and retries. Its
+optional `attempts` and `cause` describe repeated operations when relevant.
 
 ## Size and builds
 
@@ -546,9 +700,10 @@ plus the last underlying error through `cause`.
 The implementation is tree-shakeable (`sideEffects: false`) and has no runtime
 dependencies. The core exports are designed to remain below 1 kB each after
 minification and gzip when consumed individually. Current tree-shaken ESM
-measurements with esbuild are: `debounce` 721 B, `throttle` 759 B,
+measurements with esbuild are: `debounce` 722 B, `throttle` 759 B,
 `rafThrottle` 236 B, `throttlePromise` 559 B, `debounceAsync` 997 B, `batch`
-512 B, `retry` 662 B, `idle` 241 B, and `concurrencyLimit` 526 B.
+511 B, `retry` 662 B, `idle` 242 B, `concurrencyLimit` 525 B, `sample` 303 B,
+`once` 462 B, `timeout` 501 B, and `poll` 745 B.
 `debounceAsync` is closest to the budget because its concurrency state machine
 and internal AbortController must cover all three overlap policies.
 

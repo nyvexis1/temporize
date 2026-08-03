@@ -11,6 +11,10 @@ const exportsToCheck = [
   "retry",
   "idle",
   "concurrencyLimit",
+  "sample",
+  "once",
+  "timeout",
+  "poll",
   "TemporizeAbortError",
   "TemporizeTimeoutError",
 ];

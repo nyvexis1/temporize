@@ -21,11 +21,20 @@ export type {
 export { idle } from "./idle";
 export type { IdleFunction, IdleOptions } from "./idle";
 
+export { once } from "./once";
+export type { OnceFunction, OnceOptions } from "./once";
+
+export { poll } from "./poll";
+export type { PollOptions } from "./poll";
+
 export { TemporizeAbortError, TemporizeTimeoutError } from "./errors";
 export type { TemporizeTimeoutErrorOptions } from "./errors";
 
 export { retry } from "./retry";
 export type { RetryOptions } from "./retry";
+
+export { sample } from "./sample";
+export type { SampledFunction, SampleOptions } from "./sample";
 
 export { rafThrottle, throttle, throttlePromise } from "./throttle";
 export type {
@@ -34,3 +43,6 @@ export type {
   ThrottlePromiseOptions,
   ThrottledPromiseFunction,
 } from "./throttle";
+
+export { timeout } from "./timeout";
+export type { TimeoutArguments, TimeoutOptions } from "./timeout";

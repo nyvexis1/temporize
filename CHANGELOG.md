@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-04
+
+### Fixed
+
+- CommonJS consumers now receive CommonJS type declarations (`.d.cts`) through
+  the `require` export condition instead of the ESM declarations, and the
+  `react` and `vue` subpath types resolve under `node10` module resolution.
+- The CommonJS React and Vue adapters now share the core error classes instead
+  of bundling their own copies, so `instanceof TemporizeAbortError` works for
+  errors raised by hooks and composables.
+- Aborting the signal passed to `debounceAsync` now rejects overlap jobs queued
+  behind active work instead of letting them start.
+- `retry` now consults `shouldRetry` on the final attempt. A non-retryable error
+  is always rethrown unwrapped instead of becoming `TemporizeTimeoutError` when
+  it occurs on the last attempt or with `attempts: 1`.
+
+### Changed
+
+- `./package.json` is now exported.
+- Releases now run publint, arethetypeswrong, and a duplicate error-class check
+  before publishing.
+
 ## [0.4.0] - 2026-08-03
 
 ### Added
@@ -61,7 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vue composables under `@alsoftworks/temporize/vue`.
 - Dual ESM/CommonJS builds, TypeScript declarations, tests, and benchmarks.
 
-[unreleased]: https://github.com/nyvexis1/temporize/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/nyvexis1/temporize/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/nyvexis1/temporize/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nyvexis1/temporize/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nyvexis1/temporize/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nyvexis1/temporize/compare/v0.2.0...v0.3.0

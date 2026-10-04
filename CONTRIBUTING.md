@@ -14,6 +14,7 @@ npm run typecheck
 npm test
 npm run build
 npm run size
+npm run check:package
 ```
 
 `npm run format` applies Prettier. ESLint uses the recommended TypeScript rules;

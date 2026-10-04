@@ -723,6 +723,7 @@ npm run typecheck
 npm run lint
 npm run build
 npm run size
+npm run check:package
 npm run bench
 ```
 

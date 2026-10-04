@@ -585,7 +585,8 @@ with the same result or error.
 Returns an async function with the same inferred arguments and resolved result.
 The first successful attempt resolves the call. Exhaustion rejects with a
 `TemporizeTimeoutError` whose `attempts` and `cause` expose the attempt count
-and last failure. Aborting rejects immediately with `TemporizeAbortError`.
+and last failure. An error that `shouldRetry` rejects is rethrown unwrapped, even
+on the final attempt. Aborting rejects immediately with `TemporizeAbortError`.
 
 `RetryOptions`:
 

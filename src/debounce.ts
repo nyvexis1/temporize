@@ -190,7 +190,8 @@ export function debounce<Args extends unknown[], Result>(
     return trailingEdge(Date.now());
   };
   debounced.pending = () => timer !== undefined && lastArgs !== undefined;
-  options.signal?.addEventListener("abort", debounced.cancel, {
+  // Look up `cancel` at abort time so wrappers that extend it (debounceAsync) run too.
+  options.signal?.addEventListener("abort", () => debounced.cancel(), {
     once: true,
   });
   return debounced;

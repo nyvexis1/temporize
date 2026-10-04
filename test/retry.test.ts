@@ -56,6 +56,38 @@ describe("retry", () => {
     expect(shouldRetry).toHaveBeenCalledWith(error, 1);
   });
 
+  it("rethrows a non-retryable error unwrapped on the final attempt", async () => {
+    vi.useFakeTimers();
+    const transient = new Error("transient");
+    const permanent = new Error("permanent");
+    const fn = vi
+      .fn<() => Promise<never>>()
+      .mockRejectedValueOnce(transient)
+      .mockRejectedValueOnce(permanent);
+    const shouldRetry = vi.fn((error: unknown) => error === transient);
+    const wrapped = retry(fn, {
+      attempts: 2,
+      baseDelay: 1,
+      jitter: false,
+      shouldRetry,
+    });
+    const rejection = expect(wrapped()).rejects.toBe(permanent);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+    expect(shouldRetry).toHaveBeenLastCalledWith(permanent, 2);
+  });
+
+  it("consults shouldRetry when only one attempt is allowed", async () => {
+    const error = new Error("permanent");
+    const wrapped = retry(() => Promise.reject(error), {
+      attempts: 1,
+      shouldRetry: () => false,
+    });
+
+    await expect(wrapped()).rejects.toBe(error);
+  });
+
   it("aborts immediately during a backoff delay", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();

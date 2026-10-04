@@ -122,13 +122,13 @@ export function retry<Args extends unknown[], Result>(
           throw new TemporizeAbortError(options.signal.reason);
         }
         lastError = error;
+        if (!shouldRetry(error, attempt)) throw error;
         if (attempt === attempts) {
           throw new TemporizeTimeoutError("Retry attempts exhausted", {
             attempts,
             cause: error,
           });
         }
-        if (!shouldRetry(error, attempt)) throw error;
         const backoff = Math.min(maxDelay, baseDelay * factor ** (attempt - 1));
         const delay = jitter ? Math.random() * backoff : backoff;
         await sleep(delay, options.signal);

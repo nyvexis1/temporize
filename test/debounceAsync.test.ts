@@ -73,6 +73,37 @@ describe("debounceAsync", () => {
     await expect(second).resolves.toBe(2);
   });
 
+  it("rejects queued overlap jobs without starting them when the signal aborts", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const starts: number[] = [];
+    const releases: Array<() => void> = [];
+    const wrapped = debounceAsync(
+      async (value: number) => {
+        starts.push(value);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        return value;
+      },
+      5,
+      { overlap: "queue", signal: controller.signal },
+    );
+
+    const first = wrapped(1);
+    await vi.advanceTimersByTimeAsync(5);
+    const second = wrapped(2);
+    await vi.advanceTimersByTimeAsync(5);
+    const rejection = expect(second).rejects.toMatchObject({
+      name: "TemporizeAbortError",
+      reason: "stop",
+    });
+    controller.abort("stop");
+    await rejection;
+    releases.shift()?.();
+    await expect(first).resolves.toBe(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(starts).toEqual([1]);
+  });
+
   it("cancels scheduled and queued work", async () => {
     vi.useFakeTimers();
     const wrapped = debounceAsync(async (value: number) => value, 10);

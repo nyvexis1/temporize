@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>temporize playground</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>temporize playground</h1>
+      <p class="intro">
+        Each demo below is a few lines in <code>src/main.ts</code>. Change the numbers,
+        break things, and see what happens. The "server" is fake, so nothing leaves your
+        browser.
+      </p>
+
+      <section>
+        <h2>debounce: await the result</h2>
+        <p>
+          Type quickly. Only the last keystroke reaches the server, and you get its
+          result back.
+        </p>
+        <input id="search" placeholder="Search fruit…" autocomplete="off" />
+        <p class="stats" id="search-stats"></p>
+        <ul id="search-results"></ul>
+      </section>
+
+      <section>
+        <h2>debounceAsync: cancel the stale request</h2>
+        <p>
+          The server takes 800 ms. With <code>overlap: "cancel-previous"</code>, a new
+          search aborts the one still in flight, so an old answer can never overwrite a
+          newer one.
+        </p>
+        <input
+          id="slow-search"
+          placeholder="Type, pause, type again…"
+          autocomplete="off"
+        />
+        <p class="stats" id="slow-stats"></p>
+      </section>
+
+      <section>
+        <h2>retry: survive a flaky API</h2>
+        <p>
+          This endpoint fails about two times out of three. retry waits a bit and tries
+          again.
+        </p>
+        <button id="retry-run" type="button">Call the flaky API</button>
+        <ol class="log" id="retry-log"></ol>
+      </section>
+
+      <section>
+        <h2>concurrencyLimit: at most 3 at a time</h2>
+        <p>
+          Ten uploads start together, but only three run at once. The rest wait their
+          turn.
+        </p>
+        <button id="upload-run" type="button">Start 10 uploads</button>
+        <div class="bars" id="upload-bars"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

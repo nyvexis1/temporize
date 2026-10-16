@@ -36,9 +36,27 @@ New public exports must:
 React and Vue features stay in their framework subpaths and must treat those
 frameworks as optional peer dependencies.
 
+## Playground
+
+`examples/playground` is a small Vite app that people can open on StackBlitz
+from the README. It installs the published package from npm, so update it after
+a release when a demo should show a new feature:
+
+```sh
+npm install --prefix examples/playground
+npm run dev --prefix examples/playground
+```
+
+## Benchmarks
+
+`npm run bench` uses tinybench to measure raw call overhead against the
+standalone `lodash.debounce` and `lodash.throttle` packages. It doesn't claim
+the two behave the same: temporize creates a real promise for every call, which
+is part of its contract and part of the measured cost.
+
 ## Pull requests
 
 Keep each pull request narrow, explain user-visible behavior and compatibility,
-and update README/API documentation plus `CHANGELOG.md` when appropriate. CI
+and update `README.md`, `docs/API.md`, and `CHANGELOG.md` when appropriate. CI
 must pass on Node 18, 20, and 22. Avoid unrelated cleanup in behavior changes so
 reviews remain easy to verify.

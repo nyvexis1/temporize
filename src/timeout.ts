@@ -1,3 +1,4 @@
+import { toDelay } from "./delay";
 import { TemporizeAbortError, TemporizeTimeoutError } from "./errors";
 
 /**
@@ -36,7 +37,8 @@ export type TimeoutArguments<Fn extends (...args: never[]) => unknown> =
  * `TemporizeAbortError`. The underlying operation continues unless it
  * cooperatively observes the internally supplied final `AbortSignal`.
  * `TemporizeTimeoutError.attempts` is undefined because only one invocation is
- * made.
+ * made. The signal is appended after the arguments actually passed, so skipped
+ * optional parameters before it receive the signal instead.
  *
  * @param fn Async function, optionally declaring `AbortSignal` last.
  * @param ms Maximum time to wait in milliseconds. Negative values become `0`.
@@ -57,7 +59,7 @@ export function timeout<Fn extends (...args: never[]) => Promise<unknown>>(
   ms: number,
   options: TimeoutOptions = {},
 ): (...args: TimeoutArguments<Fn>) => Promise<Awaited<ReturnType<Fn>>> {
-  const delay = Math.max(0, ms || 0);
+  const delay = toDelay(ms);
 
   return function (
     this: unknown,
@@ -83,7 +85,7 @@ export function timeout<Fn extends (...args: never[]) => Promise<unknown>>(
         finish(() => reject(new TemporizeAbortError(signal?.reason)));
       };
       signal?.addEventListener("abort", onAbort, { once: true });
-      if (Number.isFinite(delay)) {
+      if (ms !== Infinity) {
         timer = setTimeout(() => {
           const error = new TemporizeTimeoutError(
             `Operation timed out after ${delay} ms`,

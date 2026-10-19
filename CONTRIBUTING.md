@@ -58,5 +58,5 @@ is part of its contract and part of the measured cost.
 
 Keep each pull request narrow, explain user-visible behavior and compatibility,
 and update `README.md`, `docs/API.md`, and `CHANGELOG.md` when appropriate. CI
-must pass on Node 18, 20, and 22. Avoid unrelated cleanup in behavior changes so
+must pass on Node 18, 20, 22, and 24. Avoid unrelated cleanup in behavior changes so
 reviews remain easy to verify.

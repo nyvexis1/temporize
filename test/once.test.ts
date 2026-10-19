@@ -72,4 +72,13 @@ describe("once", () => {
     await expect(wrapped()).rejects.toBeInstanceOf(TemporizeAbortError);
     expect(fn).not.toHaveBeenCalled();
   });
+
+  it("does not reset early when resetAfter exceeds the timer limit", async () => {
+    const fn = vi.fn(async () => 1);
+    const wrapped = once(fn, { resetAfter: 30 * 86_400_000 });
+    await wrapped();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(wrapped.invoked()).toBe(true);
+    wrapped.reset();
+  });
 });

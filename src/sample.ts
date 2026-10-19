@@ -1,3 +1,5 @@
+import { toDelay } from "./delay";
+
 /**
  * Options for fixed-interval sampling and cancellation.
  *
@@ -53,7 +55,7 @@ export function sample<Args extends unknown[], Result>(
   interval: number,
   options: SampleOptions = {},
 ): SampledFunction<Args, Result> {
-  const delay = Math.max(0, interval || 0);
+  const delay = toDelay(interval);
   let timer: ReturnType<typeof setInterval> | undefined;
   let latestArgs: Args | undefined;
   let latestThis: unknown;

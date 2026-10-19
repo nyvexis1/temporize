@@ -84,4 +84,16 @@ describe("poll", () => {
     expect(fn).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("does not time out early when the budget exceeds the timer limit", async () => {
+    const wrapped = poll(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return true;
+      },
+      10,
+      { timeout: 30 * 86_400_000 },
+    );
+    await expect(wrapped()).resolves.toBe(true);
+  });
 });

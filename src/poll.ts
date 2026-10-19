@@ -1,3 +1,4 @@
+import { toDelay } from "./delay";
 import { TemporizeAbortError, TemporizeTimeoutError } from "./errors";
 
 /**
@@ -34,7 +35,7 @@ function race<Result>(
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = Number.isFinite(remaining)
-      ? setTimeout(() => finish(() => reject(expired)), Math.max(0, remaining))
+      ? setTimeout(() => finish(() => reject(expired)), toDelay(remaining))
       : undefined;
     const finish = (callback: () => void): void => {
       if (settled) return;
@@ -70,7 +71,7 @@ function pause(
         if (timesOut) reject(expired);
         else resolve();
       },
-      Math.max(0, Math.min(delay, remaining)),
+      toDelay(Math.min(delay, remaining)),
     );
     const onAbort = (): void => {
       clearTimeout(timer);
@@ -110,7 +111,7 @@ export function poll<Args extends unknown[], Result>(
   interval: number,
   options: PollOptions<Result> = {},
 ): (...args: Args) => Promise<Result> {
-  const delay = Math.max(0, interval || 0);
+  const delay = toDelay(interval);
   const maxAttempts =
     options.attempts === undefined
       ? Number.POSITIVE_INFINITY

@@ -1,4 +1,5 @@
 import { debounce, type DebouncedFunction } from "./debounce";
+import { toDelay } from "./delay";
 import { TemporizeAbortError } from "./errors";
 
 /**
@@ -99,7 +100,7 @@ export function throttle<Args extends unknown[], Result>(
   wait: number,
   options: ThrottleOptions = {},
 ): DebouncedFunction<Args, Awaited<Result>> {
-  const delay = Math.max(0, wait || 0);
+  const delay = toDelay(wait);
   return debounce(fn, delay, {
     leading: options.leading ?? true,
     trailing: options.trailing ?? true,
@@ -178,7 +179,7 @@ export function throttlePromise<Args extends unknown[], Result>(
   wait: number,
   options: ThrottlePromiseOptions = {},
 ): ThrottledPromiseFunction<Args, Awaited<Result>> {
-  const delay = Math.max(0, wait || 0);
+  const delay = toDelay(wait);
   const queue: QueueItem<Args, Awaited<Result>>[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastStart = 0;

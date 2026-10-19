@@ -1,3 +1,4 @@
+import { toDelay } from "./delay";
 import { TemporizeAbortError } from "./errors";
 
 /**
@@ -63,7 +64,7 @@ export function batch<Args extends unknown[], Result>(
   wait: number,
   options: BatchOptions = {},
 ): BatchedFunction<Args, Result> {
-  const delay = Math.max(0, wait || 0);
+  const delay = toDelay(wait);
   const maxSize =
     options.maxSize === undefined
       ? Infinity

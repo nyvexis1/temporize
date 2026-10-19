@@ -46,18 +46,18 @@ const results = await search("cats"); // typed as whatever fetchResults returns
 
 | Function           | Use it to…                                                  | Size  |
 | ------------------ | ----------------------------------------------------------- | ----- |
-| `debounce`         | wait until calls stop, then run once                        | 724 B |
-| `debounceAsync`    | debounce, and decide what happens when a slow call overlaps | 999 B |
-| `throttle`         | run at most once per window                                 | 762 B |
-| `throttlePromise`  | queue every call and start one per window (rate limiting)   | 559 B |
+| `debounce`         | wait until calls stop, then run once                        | 732 B |
+| `debounceAsync`    | debounce, and decide what happens when a slow call overlaps | 984 B |
+| `throttle`         | run at most once per window                                 | 769 B |
+| `throttlePromise`  | queue every call and start one per window (rate limiting)   | 588 B |
 | `rafThrottle`      | run at most once per animation frame                        | 236 B |
-| `sample`           | render the latest value on a fixed clock                    | 303 B |
-| `batch`            | collect calls and send them as one request                  | 511 B |
+| `sample`           | render the latest value on a fixed clock                    | 332 B |
+| `batch`            | collect calls and send them as one request                  | 541 B |
 | `concurrencyLimit` | run at most N at once, queue the rest                       | 525 B |
-| `retry`            | retry failures with exponential backoff and jitter          | 661 B |
-| `timeout`          | give up on calls that take too long                         | 501 B |
-| `poll`             | call something repeatedly until a condition is true         | 745 B |
-| `once`             | share one initialization between every caller               | 462 B |
+| `retry`            | retry failures with exponential backoff and jitter          | 702 B |
+| `timeout`          | give up on calls that take too long                         | 523 B |
+| `poll`             | call something repeatedly until a condition is true         | 775 B |
+| `once`             | share one initialization between every caller               | 491 B |
 | `idle`             | defer non-urgent work until the browser is idle             | 242 B |
 
 Sizes are minified and gzipped, measured per function when tree-shaken. There

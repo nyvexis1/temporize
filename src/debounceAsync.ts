@@ -49,7 +49,6 @@ export type DebouncedAsyncFunction<Fn extends (...args: never[]) => unknown> =
 type Queued<Result> = {
   run: () => Promise<Result>;
   resolve: (value: Result | PromiseLike<Result>) => void;
-  reject: (reason?: unknown) => void;
 };
 
 /**
@@ -100,44 +99,29 @@ export function debounceAsync<Fn extends (...args: never[]) => unknown>(
     }
   };
 
-  const runNext = (): void => {
-    const item = queued.shift();
-    if (!item) {
-      active = undefined;
-      return;
-    }
-    const current = item.run();
+  // Mark `current` as the active job and start the next queued job once it settles.
+  const track = (current: Promise<Result>): Promise<Result> => {
     active = current;
-    current.then(item.resolve, item.reject);
-    monitor(current);
-  };
-
-  const monitor = (current: Promise<Result>): void => {
     const complete = (): void => {
-      if (active === current) runNext();
+      if (active !== current) return;
+      active = undefined;
+      const item = queued.shift();
+      if (!item) return;
+      item.resolve(track(item.run()));
     };
     current.then(complete, complete);
+    return current;
   };
 
   const dispatch = function (this: unknown, ...args: Args): Promise<Result> {
-    const thisArg = this;
-    if (!active) {
-      const current = start(args, thisArg);
-      active = current;
-      monitor(current);
-      return current;
+    if (active && overlap === "drop") return active;
+    if (active && overlap === "queue") {
+      return new Promise<Result>((resolve) => {
+        queued.push({ run: () => start(args, this), resolve });
+      });
     }
-    if (overlap === "drop") return active;
-    if (overlap === "cancel-previous") {
-      controller?.abort();
-      const current = start(args, thisArg);
-      active = current;
-      monitor(current);
-      return current;
-    }
-    return new Promise<Result>((resolve, reject) => {
-      queued.push({ run: () => start(args, thisArg), resolve, reject });
-    });
+    if (active) controller?.abort();
+    return track(start(args, this));
   };
 
   const scheduled = debounce(dispatch, wait, options) as DebouncedAsyncFunction<Fn>;
@@ -145,7 +129,7 @@ export function debounceAsync<Fn extends (...args: never[]) => unknown>(
   scheduled.cancel = () => {
     cancelScheduled();
     const error = new TemporizeAbortError(options.signal?.reason);
-    for (const item of queued.splice(0)) item.reject(error);
+    for (const item of queued.splice(0)) item.resolve(Promise.reject(error));
   };
   return scheduled;
 }

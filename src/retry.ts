@@ -1,3 +1,4 @@
+import { toDelay } from "./delay";
 import { TemporizeAbortError, TemporizeTimeoutError } from "./errors";
 
 /**
@@ -96,9 +97,9 @@ export function retry<Args extends unknown[], Result>(
   fn: (...args: Args) => Promise<Result>,
   options: RetryOptions = {},
 ): (...args: Args) => Promise<Result> {
-  const attempts = Math.max(1, Math.floor(options.attempts ?? 3));
-  const baseDelay = Math.max(0, options.baseDelay ?? 200);
-  const maxDelay = Math.max(0, options.maxDelay ?? 5_000);
+  const attempts = Math.max(1, Math.floor(options.attempts ?? 3) || 1);
+  const baseDelay = toDelay(options.baseDelay ?? 200);
+  const maxDelay = toDelay(options.maxDelay ?? 5_000);
   const factor = Math.max(0, options.factor ?? 2);
   const jitter = options.jitter ?? true;
   const shouldRetry = options.shouldRetry ?? (() => true);
@@ -130,7 +131,7 @@ export function retry<Args extends unknown[], Result>(
           });
         }
         const backoff = Math.min(maxDelay, baseDelay * factor ** (attempt - 1));
-        const delay = jitter ? Math.random() * backoff : backoff;
+        const delay = toDelay(jitter ? Math.random() * backoff : backoff);
         await sleep(delay, options.signal);
       }
     }

@@ -140,4 +140,28 @@ describe("retry", () => {
     await expect(wrapped()).rejects.toBeInstanceOf(TemporizeAbortError);
     expect(fn).not.toHaveBeenCalled();
   });
+
+  it("still makes one attempt when attempts is NaN", async () => {
+    const fn = vi.fn(async () => "ok");
+    await expect(retry(fn, { attempts: Number.NaN })()).resolves.toBe("ok");
+    expect(fn).toHaveBeenCalledOnce();
+  });
+
+  it("waits instead of retrying instantly when the delay exceeds the timer limit", async () => {
+    const fn = vi.fn(async () => {
+      throw new Error("down");
+    });
+    const controller = new AbortController();
+    const result = retry(fn, {
+      baseDelay: 30 * 86_400_000,
+      maxDelay: 30 * 86_400_000,
+      jitter: false,
+      signal: controller.signal,
+    })();
+    const rejection = expect(result).rejects.toBeInstanceOf(TemporizeAbortError);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(fn).toHaveBeenCalledOnce();
+    controller.abort();
+    await rejection;
+  });
 });

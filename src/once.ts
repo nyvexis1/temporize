@@ -1,3 +1,4 @@
+import { toDelay } from "./delay";
 import { TemporizeAbortError } from "./errors";
 
 /**
@@ -101,12 +102,9 @@ export function once<Args extends unknown[], Result>(
       });
       const shared = current;
       if (options.resetAfter !== undefined) {
-        resetTimer = setTimeout(
-          () => {
-            if (current === shared) reset();
-          },
-          Math.max(0, options.resetAfter || 0),
-        );
+        resetTimer = setTimeout(() => {
+          if (current === shared) reset();
+        }, toDelay(options.resetAfter));
       }
     }
     return observe(current);

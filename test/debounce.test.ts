@@ -122,4 +122,27 @@ describe("debounce", () => {
     await vi.advanceTimersByTimeAsync(0);
     await expect(result).resolves.toBe(42);
   });
+
+  it("falls back to the trailing edge when both edges are disabled", async () => {
+    vi.useFakeTimers();
+    const fn = vi.fn((value: number) => value);
+    const wrapped = debounce(fn, 10, { leading: false, trailing: false });
+    const result = wrapped(1);
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(result).resolves.toBe(1);
+    expect(fn).toHaveBeenCalledOnce();
+  });
+
+  it("does not spin overflowing timers when the wait exceeds the timer limit", async () => {
+    const fn = vi.fn();
+    const wrapped = debounce(fn, 30 * 86_400_000);
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    void wrapped().catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // One debounce timer plus the test's own wait; overflow re-armed every 1 ms.
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(2);
+    expect(fn).not.toHaveBeenCalled();
+    setTimeoutSpy.mockRestore();
+    wrapped.cancel();
+  });
 });

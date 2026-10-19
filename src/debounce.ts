@@ -1,3 +1,4 @@
+import { toDelay } from "./delay";
 import { TemporizeAbortError } from "./errors";
 
 /**
@@ -38,10 +39,8 @@ export interface DebouncedFunction<Args extends unknown[], Result> {
   pending(): boolean;
 }
 
-type Deferred<Result> = {
-  resolve: (value: Result | PromiseLike<Result>) => void;
-  reject: (reason?: unknown) => void;
-};
+// Waiters adopt the promise they are resolved with, including its rejection.
+type Resolve<Result> = (value: Result | PromiseLike<Result>) => void;
 
 /**
  * Delay a function until calls stop for `wait` milliseconds while preserving
@@ -67,32 +66,32 @@ export function debounce<Args extends unknown[], Result>(
   wait: number,
   options: DebounceOptions = {},
 ): DebouncedFunction<Args, Awaited<Result>> {
-  const delay = Math.max(0, wait || 0);
+  const delay = toDelay(wait);
   const leading = options.leading ?? false;
-  const trailing = options.trailing ?? true;
+  // With both edges disabled nothing would ever run, so fall back to trailing.
+  const trailing = !leading || (options.trailing ?? true);
   const hasMaxWait = options.maxWait !== undefined;
-  const maxWait = hasMaxWait ? Math.max(delay, options.maxWait ?? 0) : 0;
+  const maxWait = hasMaxWait ? Math.max(delay, toDelay(options.maxWait)) : 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastArgs: Args | undefined;
   let lastThis: unknown;
   let lastCallTime: number | undefined;
   let lastInvokeTime = 0;
-  let waiters: Deferred<Awaited<Result>>[] = [];
+  let waiters: Resolve<Awaited<Result>>[] = [];
   let lastResult: Promise<Awaited<Result>> | undefined;
 
   const settle = (
-    deferred: Deferred<Awaited<Result>>[],
+    deferred: Resolve<Awaited<Result>>[],
     promise: Promise<Awaited<Result>>,
   ): void => {
-    for (const item of deferred) promise.then(item.resolve, item.reject);
+    for (const resolve of deferred) resolve(promise);
   };
 
   const invoke = (time: number): Promise<Awaited<Result>> => {
     const args = lastArgs as Args;
     const thisArg = lastThis;
     const deferred = waiters;
-    lastArgs = undefined;
-    lastThis = undefined;
+    lastArgs = lastThis = undefined;
     waiters = [];
     lastInvokeTime = time;
     try {
@@ -125,8 +124,7 @@ export function debounce<Args extends unknown[], Result>(
     timer = undefined;
     if (trailing && lastArgs) return invoke(time);
     if (waiters.length && lastResult) settle(waiters.splice(0), lastResult);
-    lastArgs = undefined;
-    lastThis = undefined;
+    lastArgs = lastThis = undefined;
     return lastResult;
   };
 
@@ -135,7 +133,7 @@ export function debounce<Args extends unknown[], Result>(
     if (shouldInvoke(time)) {
       trailingEdge(time);
     } else {
-      timer = setTimeout(timerExpired, Math.max(0, remainingWait(time)));
+      timer = setTimeout(timerExpired, toDelay(remainingWait(time)));
     }
   };
 
@@ -146,14 +144,11 @@ export function debounce<Args extends unknown[], Result>(
   };
 
   const cancel = (reason?: unknown): void => {
-    if (timer !== undefined) clearTimeout(timer);
-    timer = undefined;
-    lastArgs = undefined;
-    lastThis = undefined;
-    lastCallTime = undefined;
+    clearTimeout(timer);
+    timer = lastArgs = lastThis = lastCallTime = undefined;
     lastInvokeTime = 0;
     const error = new TemporizeAbortError(reason);
-    for (const item of waiters.splice(0)) item.reject(error);
+    for (const resolve of waiters.splice(0)) resolve(Promise.reject(error));
   };
 
   const debounced = function (this: unknown, ...args: Args): Promise<Awaited<Result>> {
@@ -166,8 +161,8 @@ export function debounce<Args extends unknown[], Result>(
     lastThis = this;
     lastCallTime = time;
 
-    const promise = new Promise<Awaited<Result>>((resolve, reject) => {
-      waiters.push({ resolve, reject });
+    const promise = new Promise<Awaited<Result>>((resolve) => {
+      waiters.push(resolve);
     });
 
     if (invokeNow) {

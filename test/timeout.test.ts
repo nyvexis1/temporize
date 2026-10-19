@@ -71,4 +71,12 @@ describe("timeout", () => {
     });
     expect(internal?.aborted).toBe(true);
   });
+
+  it("does not expire early when the budget exceeds the timer limit", async () => {
+    const wrapped = timeout(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return "done";
+    }, 30 * 86_400_000);
+    await expect(wrapped()).resolves.toBe("done");
+  });
 });

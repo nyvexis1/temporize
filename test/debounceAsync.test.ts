@@ -111,4 +111,28 @@ describe("debounceAsync", () => {
     wrapped.cancel();
     await expect(pending).rejects.toBeInstanceOf(TemporizeAbortError);
   });
+
+  it("keeps draining the queue after a queued job rejects", async () => {
+    vi.useFakeTimers();
+    const fn = vi.fn(async (value: number) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (value === 2) throw new Error("two");
+      return value;
+    });
+    const wrapped = debounceAsync(fn, 5, { overlap: "queue" });
+
+    const first = wrapped(1);
+    await vi.advanceTimersByTimeAsync(5);
+    const second = wrapped(2);
+    const secondRejection = expect(second).rejects.toThrow("two");
+    await vi.advanceTimersByTimeAsync(5);
+    const third = wrapped(3);
+    await vi.advanceTimersByTimeAsync(5);
+
+    await vi.advanceTimersByTimeAsync(40);
+    await expect(first).resolves.toBe(1);
+    await secondRejection;
+    await expect(third).resolves.toBe(3);
+    expect(fn.mock.calls.map(([value]) => value)).toEqual([1, 2, 3]);
+  });
 });

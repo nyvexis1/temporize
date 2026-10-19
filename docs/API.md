@@ -2,6 +2,10 @@
 
 Everything in `@alsoftworks/temporize`, one function at a time. For a quick overview, see the [README](../README.md).
 
+Every wait, interval, and timeout is capped at 2,147,483,647 ms (about 24.8
+days), the longest delay JavaScript timers support. Longer values used to
+overflow and fire almost immediately.
+
 - [`debounce`](#debounce)
 - [`throttle`](#throttle)
 - [`rafThrottle`](#rafthrottle)
@@ -66,7 +70,8 @@ Returns `(...args) => Promise<Awaited<R>>` with:
 | `signal`   | none    | Cancel pending work on abort and reject calls made after abort.                                 |
 
 Negative, `NaN`, and missing waits are treated as zero. A zero-wait trailing
-call still runs in a later timer task.
+call still runs in a later timer task. Setting both `leading` and `trailing` to
+`false` would never invoke `fn`, so that combination uses the trailing edge.
 
 ## `throttle`
 
@@ -154,6 +159,12 @@ For typed signal injection, declare a required `AbortSignal` as the wrapped
 function's final parameter. `debounceAsync` removes that parameter from the
 returned function's call signature. Cancellation is cooperative: an async
 operation must observe the signal to stop its in-flight work.
+
+The signal is appended after the arguments the caller actually passed. If `fn`
+has optional parameters before its signal, or has optional parameters and no
+signal, an omitted optional argument receives the signal instead. Pass
+`undefined` explicitly for those parameters, or give the signal its own
+required final parameter.
 
 Returns the same lifecycle shape as `debounce`. `DebounceAsyncOptions` includes
 all `DebounceOptions` plus:
@@ -471,6 +482,12 @@ and resolved result. Expiration rejects with `TemporizeTimeoutError`, whose
 required final `AbortSignal` declared by `fn` is supplied internally and omitted
 from the returned function's arguments.
 
+The internal signal is appended after the arguments the caller actually
+passed, so it lands in the first omitted optional parameter. For example, with
+`(url: string, init?: RequestInit) => fetch(url, init)`, calling the wrapper
+with only `url` passes the signal as `init`. Declare the signal as the final
+parameter, or pass `undefined` for the optional arguments you skip.
+
 Timing out rejects the caller but cannot forcibly stop arbitrary promises. The
 internal signal lets cooperative operations such as `fetch` stop themselves.
 An external `{ signal }` rejects with `TemporizeAbortError` and also aborts that
@@ -667,10 +684,10 @@ library retains zero framework and runtime dependencies.
 The implementation is tree-shakeable (`sideEffects: false`) and has no runtime
 dependencies. The core exports are designed to remain below 1 kB each after
 minification and gzip when consumed individually. Current tree-shaken ESM
-measurements with esbuild are: `debounce` 724 B, `throttle` 762 B,
-`rafThrottle` 236 B, `throttlePromise` 559 B, `debounceAsync` 999 B, `batch`
-511 B, `retry` 661 B, `idle` 242 B, `concurrencyLimit` 525 B, `sample` 303 B,
-`once` 462 B, `timeout` 501 B, and `poll` 745 B.
+measurements with esbuild are: `debounce` 732 B, `throttle` 769 B,
+`rafThrottle` 236 B, `throttlePromise` 588 B, `debounceAsync` 984 B, `batch`
+541 B, `retry` 702 B, `idle` 242 B, `concurrencyLimit` 525 B, `sample` 332 B,
+`once` 491 B, `timeout` 523 B, and `poll` 775 B.
 `debounceAsync` is closest to the budget because its concurrency state machine
 and internal AbortController must cover all three overlap policies.
 
@@ -678,6 +695,6 @@ Use a bundle analyzer in the final application because shared helpers, module
 format wrappers, and bundler chunking affect attributed per-export sizes.
 
 The optional adapters are measured as independent, minified ESM bundles with
-their framework peer externalized. The React entry is 1,171 B gzipped and the
-Vue entry is 1,092 B gzipped. Both include the core scheduling code they use
+their framework peer externalized. The React entry is 1,176 B gzipped and the
+Vue entry is 1,096 B gzipped. Both include the core scheduling code they use
 and remain below the separate 1.5 kB adapter budget.

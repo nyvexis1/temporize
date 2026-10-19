@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-20
+
+### Fixed
+
+- Delays above 2,147,483,647 ms (about 24.8 days) no longer overflow. Node and
+  browsers fire such timers almost immediately, so `timeout` and `poll` expired
+  at once, `retry` retried without waiting, `once` reset right away, and
+  `debounce` spun a 1 ms timer loop. Every wait, interval, and timeout is now
+  capped at the timer limit.
+- `retry` with `attempts: NaN` now makes one attempt instead of rejecting
+  without ever calling the function.
+- `debounce` and `throttle` with both `leading` and `trailing` set to `false`
+  now use the trailing edge. Previously the function never ran and every
+  returned promise stayed pending forever.
+
+### Changed
+
+- Documented that the internal `AbortSignal` passed by `timeout` and
+  `debounceAsync` is appended after the arguments actually passed, so it lands
+  in a skipped optional parameter.
+- CI now also runs on Node 24.
+
 ## [0.4.1] - 2026-10-04
 
 ### Fixed
@@ -83,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vue composables under `@alsoftworks/temporize/vue`.
 - Dual ESM/CommonJS builds, TypeScript declarations, tests, and benchmarks.
 
-[unreleased]: https://github.com/nyvexis1/temporize/compare/v0.4.1...HEAD
+[unreleased]: https://github.com/nyvexis1/temporize/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/nyvexis1/temporize/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/nyvexis1/temporize/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nyvexis1/temporize/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/nyvexis1/temporize/compare/v0.3.0...v0.3.1
